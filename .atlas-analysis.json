@@ -1,0 +1,110 @@
+{
+  "projectType": "saas",
+  "projectName": "Agora",
+  "projectDescription": "An onchain governance platform for DAOs with proposals, delegation, voting, and community forums.",
+  "theme": "linden",
+  "primaryColor": "#7c7c7a",
+  "lightColor": "#0a0a0a",
+  "darkColor": "#f2f2ea",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "quickstart", "architecture"]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/proposals",
+              "features/delegation",
+              "features/voting",
+              "features/forums"
+            ]
+          },
+          {
+            "group": "Advanced Features",
+            "pages": [
+              "advanced/multi-tenant",
+              "advanced/governance-tokens",
+              "advanced/attestations",
+              "advanced/gasless-transactions"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/setup",
+              "guides/configuration",
+              "guides/deployment",
+              "guides/customization"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": ["api/overview", "api/authentication"]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api/proposals",
+              "api/delegates",
+              "api/votes",
+              "api/forum",
+              "api/analytics"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Forum System",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": ["forum/introduction", "forum/architecture"]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "forum/topics-and-posts",
+              "forum/reactions",
+              "forum/moderation",
+              "forum/attachments"
+            ]
+          },
+          {
+            "group": "Integration",
+            "pages": ["forum/duna-integration", "forum/search"]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-tenant DAO governance platform",
+    "Proposal creation and voting system",
+    "Delegate management and token delegation",
+    "Community forums with moderation",
+    "Gasless transactions via meta-transactions",
+    "Ethereum Attestation Service (EAS) integration",
+    "Real-time analytics and metrics",
+    "IPFS-based document storage"
+  ],
+  "publicApiSurface": [
+    "/api/v1/proposals",
+    "/api/v1/delegates",
+    "/api/v1/votes",
+    "/api/v1/forum/topics",
+    "/api/v1/forum/posts",
+    "/api/v1/analytics/metrics",
+    "/api/v1/relay/vote",
+    "/api/v1/relay/delegate"
+  ]
+}
