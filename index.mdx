@@ -1,97 +1,221 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Agora Documentation"
+description: "Build transparent, efficient onchain governance for your DAO"
+mode: "custom"
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-gradient-to-br from-[#0a0a0a] via-[#1a1a1a] to-[#0a0a0a] dark:from-[#0f1117] dark:via-[#1a1d27] dark:to-[#0f1117] py-20 lg:py-24">
+  <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAzKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-40"></div>
+  
+  <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
+    <div className="grid lg:grid-cols-12 gap-12 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+          Onchain governance for DAOs
+        </h1>
+        <p className="text-lg sm:text-xl text-gray-300 dark:text-gray-400 mb-8 max-w-2xl">
+          Build transparent, efficient governance systems with proposals, delegation, voting, and community forums. Trusted by leading DAOs including ENS, Optimism, and Uniswap.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white bg-[#7c7c7a] hover:bg-[#6a6a68] rounded-lg transition-colors no-underline"
+          >
+            Get started
+            <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </a>
+          <a 
+            href="/api/overview" 
+            className="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/30 rounded-lg transition-colors no-underline"
+          >
+            Explore API
+          </a>
+        </div>
+      </div>
+      
+      <div className="lg:col-span-5 hidden lg:block">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-tr from-[#7c7c7a]/20 to-transparent rounded-2xl blur-3xl"></div>
+          <div className="relative bg-[#1a1a1a] dark:bg-[#1a1d27] border border-white/10 rounded-2xl p-6 shadow-2xl">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            </div>
+            <pre className="text-sm text-gray-300 overflow-hidden"><code>{`// Create a proposal
+const proposal = await agora
+  .proposals()
+  .create({
+    title: "Add new feature",
+    description: "Proposal to...",
+    targets: [contractAddress],
+    values: [0],
+    calldatas: [encodedData]
+  });
 
-Get your documentation site up and running in minutes.
+// Vote on proposal
+await agora.vote({
+  proposalId: proposal.id,
+  support: 1 // For
+});`}</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Get started in minutes
+    </h2>
+    <p className="text-base text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+      Set up your DAO governance platform and start making decisions onchain
+    </p>
+  </div>
 
-## Make it yours
+  <Steps>
+    <Step title="Clone and install">
+      Clone the repository and install dependencies:
+      
+      ```bash
+      git clone https://github.com/voteagora/agora-next.git
+      cd agora-next
+      npm install
+      ```
+    </Step>
+    
+    <Step title="Configure your DAO">
+      Set up environment variables for your DAO instance:
+      
+      ```bash
+      # Core configuration
+      NEXT_PUBLIC_AGORA_INSTANCE_NAME=your-dao
+      NEXT_PUBLIC_AGORA_INSTANCE_TOKEN=YOUR_TOKEN
+      NEXT_PUBLIC_AGORA_ENV=dev
+      
+      # API keys
+      NEXT_PUBLIC_ALCHEMY_ID=your_alchemy_key
+      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_wc_project_id
+      
+      # Database URLs
+      DATABASE_URL=postgres://user:password@host/database
+      ```
+      
+      <Accordion title="View complete configuration guide">
+        See the [Configuration](/guides/configuration) guide for all environment variables and setup options.
+      </Accordion>
+    </Step>
+    
+    <Step title="Start the development server">
+      Run the development server and open your browser:
+      
+      ```bash
+      npm run dev
+      ```
+      
+      Navigate to `http://localhost:3000` to see your governance platform.
+    </Step>
+    
+    <Step title="Create your first proposal">
+      Once authenticated, create a governance proposal through the UI or API:
+      
+      ```typescript
+      // Using the API
+      const response = await fetch('/api/v1/proposals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Treasury allocation',
+          description: 'Allocate funds for development',
+          targets: [treasuryAddress],
+          values: [parseEther('100')],
+          calldatas: [encodedCalldata]
+        })
+      });
+      ```
+    </Step>
+  </Steps>
+</div>
 
-Design a docs site that looks great and empowers your users.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Core features
+    </h2>
+    <p className="text-base text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+      Everything you need to run transparent, efficient DAO governance
+    </p>
+  </div>
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+  <CardGroup cols={2}>
+    <Card title="Proposals" icon="file-contract" href="/features/proposals">
+      Create, manage, and vote on governance proposals with full onchain execution support
+    </Card>
+    <Card title="Delegation" icon="users" href="/features/delegation">
+      Delegate voting power to trusted representatives and build a strong governance community
+    </Card>
+    <Card title="Voting" icon="check-to-slot" href="/features/voting">
+      Cast votes onchain or through gasless meta-transactions with signature verification
+    </Card>
+    <Card title="Forums" icon="comments" href="/features/forums">
+      Discuss proposals and governance with integrated community forums and moderation tools
+    </Card>
+  </CardGroup>
+</div>
 
-## Create beautiful pages
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="text-center mb-12">
+    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
+      Advanced capabilities
+    </h2>
+    <p className="text-base text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+      Scale your governance with powerful features
+    </p>
+  </div>
 
-Everything you need to create world-class documentation.
+  <CardGroup cols={2}>
+    <Card title="Multi-tenant architecture" icon="building" href="/advanced/multi-tenant">
+      Run multiple DAOs on a single platform with isolated data and customization
+    </Card>
+    <Card title="Gasless transactions" icon="gas-pump" href="/advanced/gasless-transactions">
+      Enable voting and delegation without gas fees using meta-transactions
+    </Card>
+    <Card title="Attestations" icon="certificate" href="/advanced/attestations">
+      Verify delegates with Ethereum Attestation Service (EAS) integration
+    </Card>
+    <Card title="Analytics" icon="chart-line" href="/api/analytics">
+      Track governance metrics, voting patterns, and delegate performance
+    </Card>
+  </CardGroup>
+</div>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] dark:from-[#1a1d27] dark:to-[#0f1117] border border-[#27272a] dark:border-[#27272a] rounded-2xl p-8 lg:p-12">
+    <div className="max-w-3xl">
+      <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">
+        Ready to build your governance platform?
+      </h2>
+      <p className="text-lg text-gray-300 dark:text-gray-400 mb-6">
+        Deploy Agora for your DAO and start making transparent, efficient decisions onchain today.
+      </p>
+      <div className="flex flex-wrap gap-4">
+        <a 
+          href="/guides/deployment" 
+          className="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white bg-[#7c7c7a] hover:bg-[#6a6a68] rounded-lg transition-colors no-underline"
+        >
+          Deploy to production
+        </a>
+        <a 
+          href="https://github.com/voteagora/agora-next" 
+          className="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/30 rounded-lg transition-colors no-underline"
+        >
+          View on GitHub
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

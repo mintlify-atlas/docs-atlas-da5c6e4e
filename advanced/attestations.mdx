@@ -1,0 +1,482 @@
+---
+title: "Attestations"
+description: "Ethereum Attestation Service (EAS) integration for verifiable governance credentials"
+---
+
+Agora integrates with Ethereum Attestation Service (EAS) to create verifiable, on-chain attestations for governance activities including delegate verification, proposal creation, and voting records.
+
+## What is EAS?
+
+Ethereum Attestation Service is an open-source infrastructure for making attestations on-chain or off-chain about anything. In Agora, attestations provide:
+
+- **Verifiable credentials** for delegates
+- **Immutable records** of governance actions
+- **Off-chain voting** with cryptographic proof
+- **Multi-signature voting** for DAOs without executable governors
+
+## Architecture
+
+Agora uses EAS SDK to create and verify attestations:
+
+```typescript
+// src/lib/eas-server.ts:1
+import {
+  EAS,
+  Signature,
+  SchemaEncoder,
+  NO_EXPIRATION,
+} from "@ethereum-attestation-service/eas-sdk";
+
+const eas = new EAS(getEASAddress(contracts.token.chain.id));
+```
+
+### EAS Addresses by Chain
+
+```typescript
+// src/lib/constants.ts:337
+export const getEASAddress = (chainId: number) => {
+  const addresses: Record<number, string> = {
+    1: "0xA1207F3BBa224E2c9c3c6D5aF63D0eb1582Ce587",     // Mainnet
+    11155111: "0xC2679fBD37d54388Ce493F1DB75320D236e1815e", // Sepolia
+    8453: "0x4200000000000000000000000000000000000021",   // Base
+  };
+  return addresses[chainId];
+};
+```
+
+## Configuration
+
+### Environment Setup
+
+Configure EAS sender credentials:
+
+```bash
+# Private key for signing attestations server-side
+EAS_SENDER_PRIVATE_KEY=0x...
+
+# Environment determines which EAS instance to use
+NEXT_PUBLIC_AGORA_ENV=prod  # or 'dev' for testnet
+```
+
+<Warning>
+  `EAS_SENDER_PRIVATE_KEY` must be kept secure. It's used server-side only to submit attestations on behalf of users who have signed the data.
+</Warning>
+
+### Schema Configuration
+
+Define attestation schemas for different governance actions:
+
+```typescript
+// src/lib/eas.ts:21
+const EAS_V2_SCHEMA_IDS = {
+  CREATE_PROPOSAL: {
+    1: "0x...",      // Mainnet schema
+    8453: "0x...",   // Base schema
+  },
+  VOTE: {
+    1: "0x...",
+    8453: "0x...",
+  },
+  ADVANCED_VOTE: {
+    1: "0x...",
+    8453: "0x...",
+  },
+};
+```
+
+## Attestation Types
+
+### Delegate Verification
+
+Attest to delegate credentials and code of conduct compliance:
+
+```typescript
+// src/lib/eas-server.ts:31
+export const attestByDelegationServer = async ({
+  recipient,
+  expirationTime,
+  revocable,
+  encodedData,
+  signature,
+  attester,
+  schema,
+}: {
+  recipient: string;
+  expirationTime: bigint;
+  revocable: boolean;
+  encodedData: string;
+  signature: Signature;
+  attester: string;
+  schema: string;
+}) => {
+  const EAS_SENDER_PRIVATE_KEY = process.env.EAS_SENDER_PRIVATE_KEY;
+  if (!EAS_SENDER_PRIVATE_KEY) {
+    throw new Error("EAS_SENDER_PRIVATE_KEY is missing from env");
+  }
+
+  const sender = new ethers.Wallet(EAS_SENDER_PRIVATE_KEY, provider);
+  eas.connect(sender);
+
+  const txResponse = await eas.attestByDelegation({
+    schema,
+    data: {
+      recipient,
+      expirationTime,
+      revocable,
+      refUID: ZERO_BYTES32,
+      data: encodedData,
+    },
+    signature,
+    attester,
+  });
+
+  return await txResponse.wait(1);
+};
+```
+
+### Proposal Attestations
+
+Create attestations for off-chain proposals:
+
+```typescript
+// Schema for proposal creation
+const schemaEncoder = new SchemaEncoder(
+  "string title,string description,uint256 votingType,uint256 approvalCriteria"
+);
+
+const encodedData = schemaEncoder.encodeData([
+  { name: "title", value: proposalTitle, type: "string" },
+  { name: "description", value: proposalDesc, type: "string" },
+  { name: "votingType", value: EAS_VOTING_TYPE.SINGLE_CHOICE, type: "uint256" },
+  { name: "approvalCriteria", value: EAS_APPROVAL_CRITERIA.THRESHOLD, type: "uint256" },
+]);
+```
+
+### Vote Attestations
+
+Record votes as attestations for governorless voting:
+
+```typescript
+// src/lib/eas.ts:218
+export const EAS_VOTING_TYPE = {
+  SINGLE_CHOICE: 0,   // Standard yes/no/abstain
+  APPROVAL: 1,        // Multiple choice selection
+  OPTIMISTIC: 2,      // Veto-style voting
+};
+
+// Create vote attestation
+const voteSchema = new SchemaEncoder(
+  "bytes32 proposalId,uint8 support,string reason"
+);
+
+const voteData = voteSchema.encodeData([
+  { name: "proposalId", value: proposalId, type: "bytes32" },
+  { name: "support", value: voteChoice, type: "uint8" },
+  { name: "reason", value: reason, type: "string" },
+]);
+```
+
+## Delegated Attestations
+
+Users sign attestation data off-chain, then a relayer submits it:
+
+### Client-Side Signing
+
+```typescript
+// User signs attestation data
+const signature = await signer._signTypedData(
+  {
+    name: "EAS Attestation",
+    version: "1.0.0",
+    chainId,
+    verifyingContract: easAddress,
+  },
+  {
+    Attest: [
+      { name: "version", type: "uint16" },
+      { name: "schema", type: "bytes32" },
+      { name: "recipient", type: "address" },
+      { name: "time", type: "uint64" },
+      { name: "expirationTime", type: "uint64" },
+      { name: "revocable", type: "bool" },
+      { name: "refUID", type: "bytes32" },
+      { name: "data", type: "bytes" },
+    ],
+  },
+  {
+    version: 1,
+    schema: schemaId,
+    recipient: recipientAddress,
+    time: timestamp,
+    expirationTime: NO_EXPIRATION,
+    revocable: true,
+    refUID: ZERO_BYTES32,
+    data: encodedData,
+  }
+);
+```
+
+### Server-Side Submission
+
+```typescript
+// Server receives signature and submits attestation
+const { signature, attester, ...attestationData } = request.body;
+
+const receipt = await attestByDelegationServer({
+  ...attestationData,
+  signature: {
+    v: signature.v,
+    r: signature.r,
+    s: signature.s,
+  },
+  attester,
+});
+
+return receipt.transactionHash;
+```
+
+## Proposal Check Attestations
+
+Attest to proposal check results (e.g., security audits):
+
+```typescript
+// src/lib/eas-server.ts:75
+export async function createCheckProposalAttestation({
+  proposalId,
+  daoUuid,
+  passed,
+  failed,
+}: {
+  proposalId: string;
+  daoUuid: string;
+  passed: string[];
+  failed: string[];
+}) {
+  const schemaEncoder = new SchemaEncoder(
+    "string[] passed,string[] failed"
+  );
+
+  const encodedData = schemaEncoder.encodeData([
+    { name: "passed", value: passed, type: "string[]" },
+    { name: "failed", value: failed, type: "string[]" },
+  ]);
+
+  const txResponse = await eas.attest({
+    schema: CHECK_PROPOSAL_SCHEMA_ID[contracts.token.chain.id],
+    data: {
+      recipient: daoUuid,
+      expirationTime: NO_EXPIRATION,
+      revocable: false,
+      refUID: proposalId,
+      data: encodedData,
+      value: 0n,
+    },
+  });
+
+  return await txResponse.wait();
+}
+```
+
+## Off-Chain Voting with EAS
+
+Enable governorless voting using attestations:
+
+### Configuration
+
+```typescript
+// Enable off-chain proposals in tenant config
+toggle: {
+  name: "proposals/offchain",
+  enabled: true,
+  config: {
+    offchainProposalCreator: [
+      "0x...", // Authorized creator addresses
+    ],
+  },
+}
+```
+
+### Voting Flow
+
+1. **Proposal Creation** - Authorized address creates proposal attestation
+2. **Vote Casting** - Users create vote attestations referencing proposal
+3. **Vote Aggregation** - Count votes from attestations
+4. **Result Finalization** - Outcome determined by attestation totals
+
+```typescript
+// Query votes for a proposal
+const voteAttestations = await fetchAttestations({
+  schema: VOTE_SCHEMA_ID,
+  refUID: proposalAttestationUID,
+});
+
+// Aggregate voting power
+const results = voteAttestations.reduce((acc, attestation) => {
+  const { support, votingPower } = decodeVoteData(attestation.data);
+  acc[support] += votingPower;
+  return acc;
+}, { for: 0n, against: 0n, abstain: 0n });
+```
+
+## Viewing Attestations
+
+Users can view attestations on EAS explorers:
+
+```typescript
+// src/lib/utils.ts:430
+export function getAttestationUrl(hash: string, chainId: number): string {
+  if (chainId === 10) {
+    return `https://optimism.easscan.org/attestation/view/${hash}`;
+  } else if (chainId === 11155420) {
+    return `https://optimism-sepolia.easscan.org/attestation/view/${hash}`;
+  }
+  return `https://optimism.easscan.org/attestation/view/${hash}`;
+}
+```
+
+<Info>
+  Attestation UIDs are stored in proposal metadata and can be viewed on [EAScan](https://easscan.org) explorers.
+</Info>
+
+## Revocation
+
+Revoke attestations when needed:
+
+```typescript
+await eas.revoke({
+  schema: schemaId,
+  data: {
+    uid: attestationUID,
+    value: 0n,
+  },
+});
+```
+
+Revocable attestations must be marked as such during creation:
+
+```typescript
+revocable: true  // Set during attestation creation
+```
+
+## Multi-Signature Voting
+
+Use attestations for multi-sig voting without deploying a governor:
+
+```typescript
+// Each signer creates an attestation
+const signerAttestations = await Promise.all(
+  signers.map(signer => 
+    createVoteAttestation({
+      proposalId,
+      support: 1, // For
+      signer,
+    })
+  )
+);
+
+// Proposal passes when threshold met
+const requiredSignatures = 3;
+const forVotes = signerAttestations.filter(
+  a => decodeVoteData(a.data).support === 1
+);
+
+if (forVotes.length >= requiredSignatures) {
+  // Execute proposal
+}
+```
+
+## Schema Design
+
+Define custom schemas for your DAO:
+
+```typescript
+// Example: Delegate commitment schema
+const delegateSchema = new SchemaEncoder(
+  "string statement,string[] interests,bool codeOfConduct"
+);
+
+const data = delegateSchema.encodeData([
+  { 
+    name: "statement", 
+    value: "I will vote in the best interest of the protocol",
+    type: "string" 
+  },
+  { 
+    name: "interests", 
+    value: ["DeFi", "Infrastructure"], 
+    type: "string[]" 
+  },
+  { 
+    name: "codeOfConduct", 
+    value: true, 
+    type: "bool" 
+  },
+]);
+```
+
+## Proposal Types with Attestations
+
+Combine on-chain and off-chain governance:
+
+```typescript
+// Hybrid proposals
+interface HybridProposal {
+  onchain: {
+    governor: string;
+    proposalId: bigint;
+  };
+  offchain: {
+    easSchema: string;
+    attestationUID: string;
+  };
+}
+
+// Token House votes on-chain, Citizen House via attestations
+const results = {
+  tokenHouse: await getOnChainVotes(proposalId),
+  citizenHouse: await getAttestationVotes(attestationUID),
+};
+```
+
+## Best Practices
+
+1. **Schema versioning** - Use different schemas for breaking changes
+2. **Gas optimization** - Batch multiple attestations when possible
+3. **Indexing** - Index attestation events for fast querying
+4. **Revocation policy** - Define clear rules for when attestations can be revoked
+5. **Reference UIDs** - Link related attestations using `refUID`
+
+## Security Considerations
+
+<Warning>
+  **Private Key Security**: The `EAS_SENDER_PRIVATE_KEY` should be kept in secure secrets management. It's only used server-side to relay user-signed attestations.
+</Warning>
+
+- **Verify signatures** - Always verify user signatures before submitting
+- **Rate limiting** - Prevent attestation spam with rate limits
+- **Schema validation** - Validate data against schema before encoding
+- **Expiration times** - Use appropriate expiration for time-sensitive attestations
+
+## Troubleshooting
+
+### Attestation fails to submit
+
+Check that:
+- EAS contract address is correct for your chain
+- Schema ID exists and is valid
+- Signer has sufficient gas
+- Data encoding matches schema definition
+
+### Cannot find attestation
+
+Verify:
+- Transaction was confirmed
+- Using correct EAS explorer for your chain
+- Attestation UID is correct (emitted in event logs)
+
+## Related Resources
+
+- [EAS Documentation](https://docs.attest.sh/) - Official EAS docs
+- [Gasless Transactions](/advanced/gasless-transactions) - Enable free attestations
+- [Multi-Tenant Architecture](/advanced/multi-tenant) - Configure EAS per tenant
+- [EAScan](https://easscan.org) - Attestation explorer

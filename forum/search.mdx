@@ -1,0 +1,526 @@
+---
+title: 'Search Integration'
+description: 'Implement full-text search for forum topics and posts with real-time indexing'
+---
+
+## Overview
+
+The forum system includes full-text search capabilities with real-time indexing. Topics and posts are automatically indexed when created and removed from the index when deleted.
+
+## Search Service
+
+### Configuration
+
+The search service is defined in `src/lib/search.ts`:
+
+```typescript src/lib/search.ts
+import { forumSearchService, ForumDocument } from '@/lib/search';
+
+interface ForumDocument {
+  id: string;                // Unique document ID: "daoSlug_type_id"
+  contentType: 'topic' | 'post';
+  topicId: number;
+  postId?: number;
+  daoSlug: string;
+  title: string;
+  content: string;
+  author: string;
+  categoryId?: number;
+  topicTitle?: string;
+  parentPostId?: number;
+  createdAt: number;         // Unix timestamp
+}
+```
+
+## Indexing Content
+
+### Index Topic
+
+```typescript src/lib/actions/forum/search.ts
+export async function indexForumTopic({
+  topicId,
+  daoSlug,
+  title,
+  content,
+  author,
+  categoryId,
+  createdAt,
+}: {
+  topicId: number;
+  daoSlug: string;
+  title: string;
+  content: string;
+  author: string;
+  categoryId?: number;
+  createdAt?: Date;
+}): Promise<void> {
+  const { isProd } = Tenant.current();
+  
+  try {
+    const document: ForumDocument = {
+      id: `${daoSlug}_topic_${topicId}`,
+      contentType: 'topic',
+      topicId,
+      daoSlug,
+      title,
+      content,
+      author,
+      categoryId,
+      createdAt: createdAt?.getTime() ?? Date.now(),
+    };
+
+    await forumSearchService.indexDocument(document, isProd);
+  } catch (error) {
+    console.error('Error indexing forum topic:', error);
+  }
+}
+```
+
+### Index Post
+
+```typescript src/lib/actions/forum/search.ts
+export async function indexForumPost({
+  postId,
+  daoSlug,
+  content,
+  author,
+  topicId,
+  topicTitle,
+  parentPostId,
+  createdAt,
+}: {
+  postId: number;
+  daoSlug: string;
+  content: string;
+  author: string;
+  topicId: number;
+  topicTitle: string;
+  parentPostId?: number;
+  createdAt?: Date;
+}): Promise<void> {
+  try {
+    const { isProd } = Tenant.current();
+    
+    const document: ForumDocument = {
+      id: `${daoSlug}_post_${postId}`,
+      contentType: 'post',
+      postId,
+      daoSlug,
+      title: `Re: ${topicTitle}`,
+      topicId,
+      topicTitle,
+      content,
+      author,
+      parentPostId,
+      createdAt: createdAt?.getTime() ?? Date.now(),
+    };
+
+    await forumSearchService.indexDocument(document, isProd);
+  } catch (error) {
+    console.error('Error indexing forum post:', error);
+  }
+}
+```
+
+### Automatic Indexing
+
+Content is automatically indexed when created:
+
+```typescript src/lib/actions/forum/topics.ts
+export async function createForumTopic(data) {
+  // Create topic and post
+  const newTopic = await prismaWeb2Client.forumTopic.create({ ... });
+  const newPost = await prismaWeb2Client.forumPost.create({ ... });
+
+  // Index for search (async - don't block response)
+  if (!isNsfw) {
+    indexForumTopic({
+      topicId: newTopic.id,
+      daoSlug: slug,
+      title: validatedData.title,
+      content: validatedData.content,
+      author: validatedData.address,
+      categoryId: validatedData.categoryId,
+      createdAt: newTopic.createdAt,
+    }).catch((error) => 
+      console.error('Failed to index new topic:', error)
+    );
+  }
+
+  return { success: true, data: { topic: newTopic, post: newPost } };
+}
+```
+
+## Removing from Index
+
+### Remove Topic
+
+```typescript src/lib/actions/forum/search.ts
+export async function removeForumTopicFromIndex(
+  topicId: number,
+  daoSlug: string
+): Promise<void> {
+  const { isProd } = Tenant.current();
+  
+  await forumSearchService.deleteDocument({
+    id: `${daoSlug}_topic_${topicId}`,
+    daoSlug,
+    isProd,
+  });
+}
+```
+
+### Remove Post
+
+```typescript src/lib/actions/forum/search.ts
+export async function removeForumPostFromIndex(
+  postId: number,
+  daoSlug: string
+): Promise<void> {
+  const { isProd } = Tenant.current();
+  
+  await forumSearchService.deleteDocument({
+    id: `${daoSlug}_post_${postId}`,
+    daoSlug,
+    isProd,
+  });
+}
+```
+
+### Automatic Removal
+
+Content is removed from index when soft deleted:
+
+```typescript src/lib/actions/forum/topics.ts
+export async function softDeleteForumTopic(data) {
+  // Soft delete the topic
+  await prismaWeb2Client.forumTopic.update({
+    where: { id: topicId },
+    data: { deletedAt: new Date(), deletedBy: address },
+  });
+
+  // Remove from search index (async)
+  removeForumTopicFromIndex(topicId, slug).catch((error) =>
+    console.error('Failed to delete topic in search index:', error)
+  );
+
+  return { success: true };
+}
+```
+
+## Search Queries
+
+Implement search using your search service:
+
+```typescript src/lib/search.ts
+class ForumSearchService {
+  async search({
+    query,
+    daoSlug,
+    contentType,
+    categoryId,
+    author,
+    limit = 20,
+    offset = 0,
+  }: {
+    query: string;
+    daoSlug: string;
+    contentType?: 'topic' | 'post';
+    categoryId?: number;
+    author?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    // Build search query
+    const filters = [
+      { field: 'daoSlug', value: daoSlug },
+    ];
+
+    if (contentType) {
+      filters.push({ field: 'contentType', value: contentType });
+    }
+
+    if (categoryId) {
+      filters.push({ field: 'categoryId', value: categoryId });
+    }
+
+    if (author) {
+      filters.push({ field: 'author', value: author.toLowerCase() });
+    }
+
+    // Execute search
+    const results = await this.client.search({
+      index: this.indexName,
+      body: {
+        query: {
+          bool: {
+            must: [
+              {
+                multi_match: {
+                  query,
+                  fields: ['title^2', 'content'], // Title weighted higher
+                },
+              },
+            ],
+            filter: filters,
+          },
+        },
+        from: offset,
+        size: limit,
+        sort: [{ createdAt: 'desc' }],
+      },
+    });
+
+    return results.hits.hits.map(hit => hit._source);
+  }
+}
+```
+
+## UI Integration
+
+### Search Component
+
+```typescript src/components/Forum/InstantSearch.tsx
+import { useState, useEffect } from 'react';
+import { forumSearchService } from '@/lib/search';
+
+function InstantSearch({ daoSlug }: { daoSlug: string }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!query) {
+      setResults([]);
+      return;
+    }
+
+    const searchTimeout = setTimeout(async () => {
+      setLoading(true);
+      
+      const searchResults = await forumSearchService.search({
+        query,
+        daoSlug,
+        limit: 10,
+      });
+      
+      setResults(searchResults);
+      setLoading(false);
+    }, 300); // Debounce 300ms
+
+    return () => clearTimeout(searchTimeout);
+  }, [query, daoSlug]);
+
+  return (
+    <div>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search forum..."
+      />
+      
+      {loading && <Spinner />}
+      
+      {results.length > 0 && (
+        <div className="results">
+          {results.map((result) => (
+            <SearchResult key={result.id} result={result} />
+          ))}
+        </div>
+      )}
+    </div>  
+  );
+}
+```
+
+## Search Filters
+
+### Filter by Content Type
+
+```typescript
+// Search only topics
+const topicResults = await forumSearchService.search({
+  query: 'governance',
+  daoSlug: 'mydao',
+  contentType: 'topic',
+});
+
+// Search only posts
+const postResults = await forumSearchService.search({
+  query: 'governance',
+  daoSlug: 'mydao',
+  contentType: 'post',
+});
+```
+
+### Filter by Category
+
+```typescript
+// Search within a specific category
+const categoryResults = await forumSearchService.search({
+  query: 'proposal',
+  daoSlug: 'mydao',
+  categoryId: 1,
+});
+```
+
+### Filter by Author
+
+```typescript
+// Search posts by specific author
+const authorResults = await forumSearchService.search({
+  query: 'budget',
+  daoSlug: 'mydao',
+  author: '0x123...',
+});
+```
+
+## Multi-Tenant Isolation
+
+<Warning>
+  Always filter search results by `daoSlug` to ensure multi-tenant data isolation.
+</Warning>
+
+```typescript
+// Document ID format ensures uniqueness across DAOs
+const documentId = `${daoSlug}_${contentType}_${contentId}`;
+
+// Examples:
+// "mydao_topic_123"
+// "anotherdao_post_456"
+```
+
+## NSFW Content Filtering
+
+NSFW content is excluded from indexing:
+
+```typescript src/lib/actions/forum/topics.ts
+// Only index if not NSFW
+if (!isNsfw) {
+  await indexForumTopic({
+    topicId: newTopic.id,
+    daoSlug: slug,
+    title: validatedData.title,
+    content: validatedData.content,
+    author: validatedData.address,
+    categoryId: validatedData.categoryId,
+    createdAt: newTopic.createdAt,
+  });
+}
+```
+
+## Re-indexing Content
+
+When restoring soft-deleted content, re-index it:
+
+```typescript src/lib/actions/forum/topics.ts
+export async function restoreForumTopic(data) {
+  // Restore topic
+  await prismaWeb2Client.forumTopic.update({
+    where: { id: topicId },
+    data: { deletedAt: null, deletedBy: null },
+  });
+
+  // Re-index for search
+  const restoredTopic = await prismaWeb2Client.forumTopic.findUnique({
+    where: { id: topicId },
+    include: { posts: { take: 1 } },
+  });
+
+  if (restoredTopic && !restoredTopic.isNsfw) {
+    await indexForumTopic({
+      topicId: restoredTopic.id,
+      daoSlug: slug,
+      title: restoredTopic.title,
+      content: restoredTopic.posts[0]?.content || '',
+      author: restoredTopic.address,
+      categoryId: restoredTopic.categoryId,
+      createdAt: restoredTopic.createdAt,
+    });
+  }
+}
+```
+
+## Performance Optimization
+
+<AccordionGroup>
+  <Accordion title="Async indexing">
+    Always index asynchronously to avoid blocking user responses:
+    
+    ```typescript
+    indexForumTopic(data).catch(error => 
+      console.error('Indexing failed:', error)
+    );
+    ```
+  </Accordion>
+  
+  <Accordion title="Batch operations">
+    For bulk operations, batch index updates to reduce API calls.
+  </Accordion>
+  
+  <Accordion title="Debounce search">
+    Debounce search input (300-500ms) to reduce unnecessary queries.
+  </Accordion>
+  
+  <Accordion title="Limit results">
+    Use pagination and reasonable result limits (10-20 per page) for performance.
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+```typescript
+try {
+  await indexForumTopic({
+    topicId: newTopic.id,
+    daoSlug: slug,
+    title: validatedData.title,
+    content: validatedData.content,
+    author: validatedData.address,
+    categoryId: validatedData.categoryId,
+    createdAt: newTopic.createdAt,
+  });
+} catch (error) {
+  // Log error but don't fail the operation
+  console.error('Failed to index topic:', error);
+  
+  // Optionally: Queue for retry
+  await queueIndexRetry('topic', newTopic.id);
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Index on creation">
+    Always index content immediately when created for real-time search.
+  </Accordion>
+  
+  <Accordion title="Remove on deletion">
+    Remove content from index when soft deleted to exclude from search results.
+  </Accordion>
+  
+  <Accordion title="Re-index on restore">
+    Re-index content when restored to make it searchable again.
+  </Accordion>
+  
+  <Accordion title="Filter NSFW">
+    Exclude NSFW content from indexing to maintain search quality.
+  </Accordion>
+  
+  <Accordion title="Use unique IDs">
+    Include daoSlug in document IDs for multi-tenant uniqueness.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Topics & Posts" icon="comments" href="/forum/topics-and-posts">
+    Learn how content is created and managed
+  </Card>
+  <Card title="Moderation" icon="gavel" href="/forum/moderation">
+    Understand how moderation affects search
+  </Card>
+</CardGroup>

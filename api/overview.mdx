@@ -1,0 +1,180 @@
+---
+title: API Overview
+description: Introduction to the Agora API for programmatic access to governance data
+---
+
+The Agora API provides programmatic access to DAO governance data including proposals, delegates, votes, and analytics. The API is built on Next.js and uses PostgreSQL for data storage with Prisma ORM.
+
+## Base URL
+
+All API requests should be made to:
+
+```
+https://vote.{dao-domain}/api/v1
+```
+
+For example:
+- ENS: `https://vote.ens.domains/api/v1`
+- Optimism: `https://vote.optimism.io/api/v1`
+- Uniswap: `https://vote.uniswap.org/api/v1`
+
+## Authentication
+
+All API endpoints require authentication using either:
+- **API Key** (recommended for server-to-server)
+- **JWT Token** (for wallet-based authentication)
+
+See the [Authentication](/api/authentication) page for details.
+
+## Response Format
+
+All API responses follow a consistent JSON format:
+
+### Success Response
+
+```json
+{
+  "meta": {
+    "has_next": true,
+    "next_offset": 10,
+    "total_returned": 10,
+    "total_count": 245
+  },
+  "data": [...]
+}
+```
+
+### Error Response
+
+```json
+{
+  "error": "Error description",
+  "status": 400
+}
+```
+
+## Pagination
+
+Most list endpoints support pagination using query parameters:
+
+<ParamField query="limit" type="number" default="10">
+  Number of items to return (max: 50-1000 depending on endpoint)
+</ParamField>
+
+<ParamField query="offset" type="number" default="0">
+  Number of items to skip
+</ParamField>
+
+### Example
+
+```bash
+GET /api/v1/proposals?limit=20&offset=40
+```
+
+## Rate Limiting
+
+API rate limits are enforced per API key:
+- **Rate limits** are configured per tenant and API user
+- Monitor your usage through provider dashboards
+- Contact support if you need higher limits
+
+## Error Handling
+
+The API uses standard HTTP status codes:
+
+| Status Code | Description |
+|-------------|-------------|
+| `200` | Success |
+| `400` | Bad Request - Invalid parameters |
+| `401` | Unauthorized - Missing or invalid authentication |
+| `404` | Not Found - Resource doesn't exist |
+| `500` | Internal Server Error |
+
+### Common Error Responses
+
+**Invalid Query Parameters**
+```json
+{
+  "error": "Invalid query parameters: limit must be between 1 and 50",
+  "status": 400
+}
+```
+
+**Authentication Required**
+```json
+{
+  "error": "Missing or invalid bearer token",
+  "status": 401
+}
+```
+
+**Internal Server Error**
+```json
+{
+  "error": "Internal server error: [error details]",
+  "status": 500
+}
+```
+
+## Data Sources
+
+The API aggregates data from multiple sources:
+
+1. **PostgreSQL Database** - Primary data store with views and materialized views
+2. **DAO Node Service** - External service for delegate and proposal data
+3. **Snapshot** - Off-chain voting data
+4. **Blockchain RPC** - On-chain data via Alchemy
+
+## Environment Configuration
+
+The API behavior varies based on the tenant configuration:
+
+- `NEXT_PUBLIC_AGORA_INSTANCE_NAME` - Determines DAO configuration
+- `NEXT_PUBLIC_AGORA_ENV` - Controls prod vs dev environment
+- Database URLs are environment-specific (prod vs dev)
+
+See the [README](https://github.com/voteagora/agora-next) for full environment variable documentation.
+
+## Getting Started
+
+1. [Generate an API key](/api/authentication#api-key-generation)
+2. Make your first request to [/api/v1/proposals](/api/proposals)
+3. Explore other endpoints for [delegates](/api/delegates), [votes](/api/votes), and [analytics](/api/analytics)
+
+## SDK and Libraries
+
+Currently, there are no official SDKs. You can use any HTTP client:
+
+```bash
+# cURL
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  https://vote.ens.domains/api/v1/proposals
+```
+
+```javascript
+// JavaScript/Node.js
+const response = await fetch('https://vote.ens.domains/api/v1/proposals', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY'
+  }
+});
+const data = await response.json();
+```
+
+```python
+# Python
+import requests
+
+response = requests.get(
+    'https://vote.ens.domains/api/v1/proposals',
+    headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+data = response.json()
+```
+
+## Support
+
+For API support:
+- Review the endpoint documentation
+- Check error messages for guidance
+- Contact the Agora team via Discord

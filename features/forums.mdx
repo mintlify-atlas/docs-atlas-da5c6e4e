@@ -1,0 +1,630 @@
+---
+title: Forums
+description: Discuss governance topics, proposals, and build community through the integrated forum system
+---
+
+The Agora Forum system provides a comprehensive discussion platform for DAO governance and community engagement, supporting rich interactions, content moderation, and document management.
+
+## Overview
+
+The forum system enables:
+
+- **Discussion threads** - Create topics and reply with nested conversations
+- **Content moderation** - Admin controls with NSFW detection
+- **Document sharing** - IPFS-based file uploads and attachments
+- **Reactions** - Express sentiment with emoji reactions
+- **Upvoting** - Highlight quality content
+- **Search** - Full-text search across all forum content
+
+<Note>
+  The forum is fully integrated with your DAO's governance system, making it easy to discuss proposals and coordinate with delegates.
+</Note>
+
+## Forum Structure
+
+### Categories
+
+Forums are organized into categories:
+
+<CardGroup cols={2}>
+  <Card title="General Discussions" icon="comments">
+    Open conversations about DAO operations and governance
+  </Card>
+  
+  <Card title="Proposal Discussions" icon="file-lines">
+    Dedicated spaces for specific proposals
+  </Card>
+  
+  <Card title="Admin Categories" icon="shield">
+    Restricted areas for governance team coordination
+  </Card>
+  
+  <Card title="DUNA Reports" icon="file-invoice">
+    Specialized category for quarterly reports and documents
+  </Card>
+</CardGroup>
+
+### Topics
+
+Each category contains multiple topics (threads):
+
+- Topic title and author
+- Creation date and last activity
+- Post count and view count
+- Upvote count for quality signaling
+- Archived/deleted status indicators
+
+### Posts
+
+Topics contain posts with features:
+
+- Rich text content with markdown support
+- Nested replies (threaded conversations)
+- File attachments from IPFS
+- Emoji reactions from community
+- Soft delete and moderation controls
+- NSFW content flagging
+
+## Creating Content
+
+### Starting a New Topic
+
+<Steps>
+  <Step title="Navigate to Category">
+    Choose the appropriate category for your discussion
+  </Step>
+  
+  <Step title="Click Create Topic">
+    Look for the "New Topic" or "+" button
+  </Step>
+  
+  <Step title="Write Your Post">
+    Add a clear title and detailed description
+  </Step>
+  
+  <Step title="Add Attachments (Optional)">
+    Upload relevant files, images, or documents
+  </Step>
+  
+  <Step title="Sign and Submit">
+    Sign with your wallet to post
+  </Step>
+</Steps>
+
+<CodeGroup>
+```typescript Creating a Forum Topic
+import { createForumTopic } from '@/lib/actions/forum/topics';
+
+const topic = await createForumTopic({
+  categoryId: 1,
+  title: "Proposal Discussion: Treasury Diversification",
+  content: "Let's discuss the proposed treasury diversification strategy...",
+  address: userAddress,
+  signature: signedMessage
+});
+```
+</CodeGroup>
+
+### Replying to Topics
+
+Join existing conversations:
+
+1. Open the topic you want to reply to
+2. Read existing posts and replies
+3. Write your response in the reply box
+4. Optionally attach files or reference other posts
+5. Sign and submit your reply
+
+**Reply features:**
+- Quote other posts for context
+- Tag users with @ mentions
+- Add inline images and links
+- Edit within a time window
+
+<CodeGroup>
+```typescript Creating a Forum Post
+import { createForumPost } from '@/lib/actions/forum/posts';
+
+const post = await createForumPost(topicId, {
+  content: "Great point! I'd like to add...",
+  parentPostId: 123, // Optional: for threaded replies
+  address: userAddress,
+  signature: signedMessage
+});
+```
+</CodeGroup>
+
+## Interactive Features
+
+### Emoji Reactions
+
+React to posts with emojis:
+
+<CardGroup cols={3}>
+  <Card title="Quick Reactions" icon="face-smile">
+    Default emoji set: 👍, 🔥, 🤔, 👀, 🎉, ❤️, 👏, 😄, 🤝
+  </Card>
+  
+  <Card title="One Click" icon="mouse-pointer">
+    Click any emoji to add your reaction
+  </Card>
+  
+  <Card title="See Who Reacted" icon="users">
+    Hover to see which users added each reaction
+  </Card>
+</CardGroup>
+
+<CodeGroup>
+```typescript src/lib/actions/forum/reactions.ts
+import { addForumReaction, removeForumReaction } from '@/lib/actions/forum/reactions';
+
+// Add a reaction
+await addForumReaction({
+  postId: 123,
+  emoji: "👍",
+  address: userAddress,
+  signature: signedMessage
+});
+
+// Remove your reaction
+await removeForumReaction({
+  postId: 123,
+  emoji: "👍",
+  address: userAddress,
+  signature: signedMessage
+});
+```
+</CodeGroup>
+
+### Upvoting Topics
+
+Highlight quality content:
+
+- One upvote per user per topic
+- Upvote count displayed prominently
+- Helps surface important discussions
+- Can be removed/changed at any time
+
+<CodeGroup>
+```typescript src/lib/actions/forum/topics.ts
+import { upvoteForumTopic, removeUpvoteForumTopic } from '@/lib/actions/forum/topics';
+
+// Upvote a topic
+await upvoteForumTopic({
+  topicId: 456,
+  address: userAddress,
+  signature: signedMessage
+});
+
+// Remove upvote
+await removeUpvoteForumTopic({
+  topicId: 456,
+  address: userAddress,
+  signature: signedMessage
+});
+```
+</CodeGroup>
+
+## File Management
+
+### Uploading Files
+
+Share documents, images, and other files:
+
+<Warning>
+  Files are stored on IPFS for permanent, decentralized storage. Make sure you want to permanently publish before uploading.
+</Warning>
+
+**Supported file types:**
+- Documents: PDF, DOC, DOCX, TXT, MD
+- Images: JPG, PNG, GIF, SVG
+- Other: ZIP, CSV, JSON
+
+<Steps>
+  <Step title="Select File">
+    Choose file from your computer (check size limits)
+  </Step>
+  
+  <Step title="File Validation">
+    System checks file type and size
+  </Step>
+  
+  <Step title="Upload to IPFS">
+    File is uploaded to decentralized storage
+  </Step>
+  
+  <Step title="Attach to Post">
+    IPFS CID is linked to your post or topic
+  </Step>
+</Steps>
+
+<CodeGroup>
+```typescript src/lib/actions/forum/attachments.ts
+import { uploadFileToIPFS, uploadDocumentFromBase64 } from '@/lib/actions/forum/attachments';
+
+// Upload a file
+const ipfsCid = await uploadFileToIPFS(file);
+
+// Upload document with metadata
+const attachment = await uploadDocumentFromBase64({
+  data: base64Data,
+  fileName: "proposal-details.pdf",
+  contentType: "application/pdf",
+  address: userAddress,
+  signature: signedMessage,
+  categoryId: 1 // Optional: attach to category
+});
+```
+</CodeGroup>
+
+### Accessing Files
+
+Download and view attachments:
+
+1. Files appear as links in posts
+2. Click to download or view
+3. Served through IPFS gateway
+4. Permanent and immutable storage
+
+## Search and Discovery
+
+### Full-Text Search
+
+Find discussions quickly:
+
+- Search across all topics and posts
+- Real-time indexing of new content
+- Filter by category or author
+- Sort by relevance or date
+
+<CodeGroup>
+```typescript src/lib/actions/forum/search.ts
+import { searchForumContent } from '@/lib/actions/forum/search';
+
+const results = await searchForumContent({
+  query: "treasury diversification",
+  categoryId: 1, // Optional filter
+  limit: 20,
+  offset: 0
+});
+```
+</CodeGroup>
+
+### Browse by Category
+
+Explore organized discussions:
+
+1. View all categories on forum home
+2. See topic count and recent activity
+3. Click category to view all topics
+4. Sort topics by activity, upvotes, or date
+
+## Content Moderation
+
+### Automatic Moderation
+
+The system includes built-in protections:
+
+<CardGroup cols={2}>
+  <Card title="NSFW Detection" icon="eye-slash">
+    Automatic content analysis flags inappropriate content
+  </Card>
+  
+  <Card title="Spam Prevention" icon="shield-halved">
+    Rate limiting and signature verification prevent abuse
+  </Card>
+</CardGroup>
+
+### Admin Controls
+
+Forum administrators can:
+
+<Tabs>
+  <Tab title="Soft Delete">
+    Hide content while preserving it for recovery
+  </Tab>
+  
+  <Tab title="Hard Delete">
+    Permanently remove content from the database
+  </Tab>
+  
+  <Tab title="Archive">
+    Move old or resolved topics to archive
+  </Tab>
+  
+  <Tab title="Restore">
+    Bring back soft-deleted content
+  </Tab>
+</Tabs>
+
+<CodeGroup>
+```typescript Admin Actions
+import { 
+  deleteForumTopic,
+  softDeleteForumTopic,
+  archiveForumTopic,
+  restoreForumTopic 
+} from '@/lib/actions/forum/topics';
+
+// Soft delete (reversible)
+await softDeleteForumTopic({
+  topicId: 123,
+  address: adminAddress,
+  signature: signedMessage
+});
+
+// Archive topic
+await archiveForumTopic({
+  topicId: 123,
+  address: adminAddress,
+  signature: signedMessage
+});
+
+// Restore deleted topic
+await restoreForumTopic({
+  topicId: 123,
+  address: adminAddress,
+  signature: signedMessage
+});
+```
+</CodeGroup>
+
+### Permission System
+
+Role-based access control:
+
+- **Super Admin** - Full control over all forums
+- **Admin** - Manage topics and posts
+- **DUNA Admin** - Special access to DUNA categories
+- **Users** - Create and reply to topics
+
+<CodeGroup>
+```typescript src/lib/actions/forum/admin.ts
+import { checkForumPermissions } from '@/lib/actions/forum/admin';
+
+const permissions = await checkForumPermissions(
+  userAddress,
+  categoryId // optional
+);
+
+if (permissions.canManageTopics) {
+  // User can moderate content
+}
+
+if (permissions.canCreateAttachments) {
+  // User can upload files
+}
+```
+</CodeGroup>
+
+## Analytics and Tracking
+
+### View Tracking
+
+Monitor topic popularity:
+
+- View counts tracked per topic
+- Real-time updates via Redis
+- Periodic sync to PostgreSQL
+- Unique view deduplication
+
+### Subscription System
+
+Stay notified of updates:
+
+<Steps>
+  <Step title="Subscribe to Topic">
+    Get notified of new replies
+  </Step>
+  
+  <Step title="Subscribe to Category">
+    Track all new topics in a category
+  </Step>
+  
+  <Step title="Manage Subscriptions">
+    View and unsubscribe from your profile
+  </Step>
+</Steps>
+
+<CodeGroup>
+```typescript src/lib/actions/forum/analytics.ts
+import { 
+  subscribeToForumContent,
+  unsubscribeFromForumContent,
+  getForumSubscriptions 
+} from '@/lib/actions/forum/analytics';
+
+// Subscribe to a topic
+await subscribeToForumContent({
+  targetType: 'topic',
+  targetId: 123,
+  address: userAddress,
+  signature: signedMessage
+});
+
+// Get user's subscriptions
+const subs = await getForumSubscriptions(userAddress);
+```
+</CodeGroup>
+
+## DUNA Integration
+
+Special features for DUNA (Decentralized Universal Node Administration):
+
+### Quarterly Reports
+
+<CardGroup cols={2}>
+  <Card title="Report Creation" icon="file-invoice">
+    Create quarterly reports with structured data
+  </Card>
+  
+  <Card title="Document Storage" icon="database">
+    Store supporting documents on IPFS
+  </Card>
+  
+  <Card title="Comment System" icon="comments">
+    Discuss reports with stakeholders
+  </Card>
+  
+  <Card title="Archive Access" icon="archive">
+    Browse historical reports and documents
+  </Card>
+</CardGroup>
+
+### Document Management
+
+Dedicated document handling:
+
+- Upload official documents
+- Organize by category
+- Version control through IPFS
+- Access control by role
+- Archive old documents
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Creating Quality Topics">
+    - Use clear, descriptive titles
+    - Provide sufficient context and background
+    - Include relevant links and references
+    - Choose appropriate category
+    - Tag important stakeholders
+  </Accordion>
+  
+  <Accordion title="Engaging in Discussions">
+    - Read existing replies before posting
+    - Stay on topic and relevant
+    - Be respectful and constructive
+    - Use reactions to show agreement
+    - Quote specific points when replying
+  </Accordion>
+  
+  <Accordion title="File Attachments">
+    - Compress large files before uploading
+    - Use descriptive file names
+    - Consider file permanence (IPFS)
+    - Verify file type is supported
+    - Include file descriptions in post
+  </Accordion>
+  
+  <Accordion title="Content Moderation">
+    - Report inappropriate content to admins
+    - Use soft delete for borderline cases
+    - Document moderation decisions
+    - Communicate with affected users
+    - Archive resolved discussions
+  </Accordion>
+</AccordionGroup>
+
+## API Reference
+
+### Working with Topics
+
+```typescript
+// Fetch topics in a category
+const topics = await getForumTopics({
+  categoryId: 1,
+  limit: 20,
+  offset: 0,
+  sortBy: 'recent' // or 'upvotes', 'replies'
+});
+
+// Get single topic with posts
+const topic = await getForumTopic(topicId);
+
+// Get upvote count
+const upvotes = await getForumTopicUpvotes(topicId);
+
+// Check user's vote
+const myVote = await getMyForumTopicVote(topicId, address);
+```
+
+### Working with Posts
+
+```typescript
+// Get posts for a topic
+const posts = await getForumPostsByTopic(topicId);
+
+// Get single post
+const post = await getForumPost(postId);
+
+// Delete post (soft delete)
+await softDeleteForumPost({
+  postId,
+  address,
+  signature
+});
+```
+
+### Categories and Attachments
+
+```typescript
+// Get all categories
+const categories = await getForumCategories();
+
+// Get attachments
+const attachments = await getForumAttachments({
+  categoryId: 1, // optional
+  limit: 20
+});
+
+// Delete attachment
+await deleteForumAttachment({
+  attachmentId,
+  address,
+  signature
+});
+```
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Proposals" href="/features/proposals" icon="file-lines">
+    Discuss proposals before and after voting
+  </Card>
+  
+  <Card title="Delegation" href="/features/delegation" icon="users">
+    Coordinate with delegates in forum discussions
+  </Card>
+  
+  <Card title="Voting" href="/features/voting" icon="square-check">
+    Link forum discussions to governance votes
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Cannot create topic">
+    - Check wallet is connected
+    - Verify you have permission for category
+    - Ensure category accepts new topics
+    - Check for rate limiting
+    - Verify signature is valid
+  </Accordion>
+  
+  <Accordion title="File upload failing">
+    - Check file size limit (varies by tenant)
+    - Verify file type is supported
+    - Ensure stable internet connection
+    - Try again if IPFS is temporarily slow
+    - Check browser console for errors
+  </Accordion>
+  
+  <Accordion title="Content not appearing">
+    - Wait for transaction confirmation
+    - Refresh the page
+    - Check if content was auto-flagged as NSFW
+    - Verify you're viewing correct category
+    - Contact admin if persists
+  </Accordion>
+  
+  <Accordion title="Cannot react or upvote">
+    - Ensure wallet is connected
+    - Check you haven't already reacted
+    - Verify content isn't archived/deleted
+    - Sign the action in your wallet
+    - Refresh if reaction doesn't appear
+  </Accordion>
+</AccordionGroup>

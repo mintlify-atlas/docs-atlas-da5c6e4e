@@ -1,0 +1,754 @@
+---
+title: Deployment Guide
+description: Deploy your Agora instance to production with Vercel and configure monitoring
+---
+
+## Overview
+
+This guide covers deploying Agora to production, with a focus on Vercel deployment (the recommended platform), along with environment setup, database migrations, and monitoring configuration.
+
+<Info>
+  Agora is built on Next.js 14 and optimized for deployment on Vercel, the platform from the creators of Next.js.
+</Info>
+
+## Pre-Deployment Checklist
+
+Before deploying, ensure you have:
+
+<Steps>
+  <Step title="Production environment variables">
+    Prepare all required environment variables for production. See the [Configuration Guide](/guides/configuration) for the complete list.
+
+    <Check>
+      Minimum required variables:
+      - `NEXT_PUBLIC_AGORA_INSTANCE_NAME`
+      - `NEXT_PUBLIC_AGORA_INSTANCE_TOKEN`
+      - `NEXT_PUBLIC_AGORA_ENV=prod`
+      - `NEXT_PUBLIC_ALCHEMY_ID`
+      - `SERVERSIDE_ALCHEMY_ID_PROD`
+      - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
+      - `READ_WRITE_WEB2_DATABASE_URL_PROD`
+      - `READ_ONLY_WEB3_DATABASE_URL_PROD`
+      - `JWT_SECRET`
+      - `NEXT_PUBLIC_AGORA_BASE_URL`
+    </Check>
+  </Step>
+
+  <Step title="Production database">
+    Set up production PostgreSQL databases:
+    - **Web2 database** for user-generated content
+    - **Web3 database** for blockchain indexed data
+
+    Ensure proper backups and replication are configured.
+  </Step>
+
+  <Step title="Code quality checks">
+    Run all quality checks before deploying:
+
+    ```bash
+    npm run prettier-src
+    npm run lint
+    npm run typecheck
+    npm test
+    ```
+  </Step>
+
+  <Step title="Build verification">
+    Test the production build locally:
+
+    ```bash
+    npm run build
+    npm start
+    ```
+
+    Verify the application runs correctly on `http://localhost:3000`
+  </Step>
+</Steps>
+
+## Vercel Deployment
+
+Vercel is the recommended deployment platform for Agora.
+
+### Initial Setup
+
+<Steps>
+  <Step title="Create Vercel account">
+    Sign up at [vercel.com](https://vercel.com) if you haven't already.
+  </Step>
+
+  <Step title="Install Vercel CLI (Optional)">
+    For command-line deployment:
+
+    ```bash
+    npm install -g vercel
+    ```
+  </Step>
+
+  <Step title="Connect repository">
+    **Option 1: Via Vercel Dashboard**
+    1. Go to [Vercel Dashboard](https://vercel.com/new)
+    2. Click "Import Project"
+    3. Select your Git provider (GitHub, GitLab, Bitbucket)
+    4. Choose your Agora repository
+    5. Vercel will auto-detect Next.js configuration
+
+    **Option 2: Via CLI**
+    ```bash
+    cd agora-next
+    vercel
+    ```
+
+    Follow the prompts to link your repository.
+  </Step>
+
+  <Step title="Configure environment variables">
+    In the Vercel dashboard:
+
+    1. Go to **Project Settings** → **Environment Variables**
+    2. Add all production environment variables
+    3. Set the environment scope:
+       - **Production** for production deployments
+       - **Preview** for pull request previews
+       - **Development** for local development
+
+    <Tip>
+      Use different values for Preview and Production environments to test safely.
+    </Tip>
+
+    **Critical variables to set**:
+    ```bash
+    NEXT_PUBLIC_AGORA_ENV=prod
+    NEXT_PUBLIC_AGORA_INSTANCE_NAME=ens
+    NEXT_PUBLIC_AGORA_INSTANCE_TOKEN=ENS
+    NEXT_PUBLIC_AGORA_BASE_URL=https://your-domain.com
+    # ... add all other required variables
+    ```
+  </Step>
+
+  <Step title="Configure build settings">
+    Vercel auto-detects Next.js projects, but verify:
+
+    - **Framework Preset**: Next.js
+    - **Build Command**: `npm run build` (or `next build`)
+    - **Output Directory**: `.next`
+    - **Install Command**: `npm install`
+    - **Development Command**: `npm run dev`
+
+    <Info>
+      These are usually auto-configured correctly for Next.js projects.
+    </Info>
+  </Step>
+
+  <Step title="Deploy">
+    **Automatic deployment**:
+    - Push to your main branch
+    - Vercel automatically builds and deploys
+
+    **Manual deployment via CLI**:
+    ```bash
+    # Deploy to preview
+    vercel
+
+    # Deploy to production
+    vercel --prod
+    ```
+  </Step>
+</Steps>
+
+### Custom Domain Setup
+
+<Steps>
+  <Step title="Add domain in Vercel">
+    1. Go to **Project Settings** → **Domains**
+    2. Click "Add Domain"
+    3. Enter your domain (e.g., `vote.ens.domains`)
+  </Step>
+
+  <Step title="Configure DNS">
+    Vercel will provide DNS configuration:
+
+    **Option 1: Using Vercel nameservers (recommended)**
+    - Point your domain's nameservers to Vercel
+    - Vercel manages SSL automatically
+
+    **Option 2: Using CNAME record**
+    ```
+    Type: CNAME
+    Name: @ (or subdomain)
+    Value: cname.vercel-dns.com
+    ```
+
+    **Option 3: Using A record**
+    ```
+    Type: A
+    Name: @
+    Value: 76.76.21.21
+    ```
+  </Step>
+
+  <Step title="Wait for SSL provisioning">
+    Vercel automatically provisions SSL certificates. This usually takes a few minutes.
+
+    <Check>
+      Your site will be available at `https://your-domain.com` once SSL is active.
+    </Check>
+  </Step>
+
+  <Step title="Update environment variables">
+    Update `NEXT_PUBLIC_AGORA_BASE_URL` to your custom domain:
+
+    ```bash
+    NEXT_PUBLIC_AGORA_BASE_URL=https://vote.ens.domains
+    ```
+
+    Redeploy for changes to take effect.
+  </Step>
+</Steps>
+
+### Automatic Vercel Environment Variables
+
+Vercel automatically sets these variables (used for monitoring):
+
+- `VERCEL_ENV` - Environment type (production/preview/development)
+- `VERCEL_URL` - Deployment URL
+- `VERCEL_REGION` - Deployment region
+- `VERCEL_GIT_COMMIT_SHA` - Git commit SHA
+- `VERCEL_BRANCH_URL` - Branch-specific URL
+
+<Info>
+  These are used by Agora's OpenTelemetry integration for tracing. Do not override them.
+</Info>
+
+## Environment Setup for Production
+
+### Database Configuration
+
+<Steps>
+  <Step title="Provision production databases">
+    Set up two PostgreSQL databases:
+
+    **Recommended providers**:
+    - [Supabase](https://supabase.com) - Postgres with built-in features
+    - [Neon](https://neon.tech) - Serverless Postgres
+    - [AWS RDS](https://aws.amazon.com/rds/) - Managed PostgreSQL
+    - [Google Cloud SQL](https://cloud.google.com/sql) - Managed databases
+
+    **Configuration**:
+    - **Web2 database**: User content, requires read-write access
+    - **Web3 database**: Indexed blockchain data, read-only access
+  </Step>
+
+  <Step title="Set connection URLs">
+    Add database URLs to Vercel environment variables:
+
+    ```bash
+    READ_WRITE_WEB2_DATABASE_URL_PROD=postgres://user:pass@host:5432/agora_web2_prod
+    READ_ONLY_WEB3_DATABASE_URL_PROD=postgres://user:pass@host:5432/agora_web3_prod
+    ```
+
+    <Warning>
+      Use connection pooling for production (e.g., PgBouncer) to handle high traffic.
+    </Warning>
+  </Step>
+
+  <Step title="Enable SSL connections">
+    Ensure SSL is enabled for database connections:
+
+    ```bash
+    # Add SSL parameters to connection string
+    postgres://user:pass@host:5432/db?sslmode=require
+    ```
+  </Step>
+
+  <Step title="Configure connection pooling">
+    For serverless environments, use connection pooling:
+
+    - **Supabase**: Use the connection pooler endpoint
+    - **Neon**: Built-in connection pooling
+    - **PgBouncer**: Set up separately for other providers
+
+    Update Prisma configuration in `prisma/schema.prisma`:
+
+    ```prisma
+    datasource db {
+      provider = "postgresql"
+      url      = env("DATABASE_URL")
+    }
+
+    generator client {
+      provider        = "prisma-client-js"
+      previewFeatures = ["driverAdapters"]
+    }
+    ```
+  </Step>
+</Steps>
+
+### API Keys and Services
+
+<AccordionGroup>
+  <Accordion title="Alchemy Configuration">
+    Set up separate Alchemy API keys:
+
+    ```bash
+    # Client-side key (domain-whitelisted)
+    NEXT_PUBLIC_ALCHEMY_ID=your_client_key
+
+    # Server-side key (no restrictions needed)
+    SERVERSIDE_ALCHEMY_ID_PROD=your_server_key
+    ```
+
+    **In Alchemy Dashboard**:
+    1. Create two API keys (client and server)
+    2. For client key: Add your domain to whitelist
+    3. For server key: No restrictions needed
+    4. Monitor usage to stay within limits
+  </Accordion>
+
+  <Accordion title="WalletConnect Setup">
+    Configure WalletConnect for production:
+
+    ```bash
+    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id
+    ```
+
+    **In WalletConnect Cloud**:
+    1. Create a production project
+    2. Add your domain to allowed origins
+    3. Copy the Project ID
+  </Accordion>
+
+  <Accordion title="External Services">
+    Configure optional external services:
+
+    **Tenderly (Transaction Simulation)**:
+    ```bash
+    TENDERLY_USER=your_username
+    TENDERLY_PROJECT=your_project
+    TENDERLY_ACCESS_KEY=your_access_key
+    ```
+
+    **Pinata (IPFS)**:
+    ```bash
+    PINATA_JWT=your_pinata_jwt
+    ```
+
+    **Etherscan**:
+    ```bash
+    NEXT_PUBLIC_ETHERSCAN_API_KEY=your_etherscan_key
+    ```
+  </Accordion>
+
+  <Accordion title="Security Keys">
+    Generate and securely store sensitive keys:
+
+    **JWT Secret**:
+    ```bash
+    # Generate a strong random secret
+    openssl rand -base64 64
+    JWT_SECRET=<generated_secret>
+    ```
+
+    **Gas Sponsor Private Key**:
+    ```bash
+    GAS_SPONSOR_PK=your_private_key_without_0x
+    ```
+
+    **EAS Sender Private Key**:
+    ```bash
+    EAS_SENDER_PRIVATE_KEY=your_eas_private_key
+    ```
+
+    <Warning>
+      Store private keys in Vercel's encrypted environment variables. Never commit to Git.
+    </Warning>
+  </Accordion>
+</AccordionGroup>
+
+## Database Migrations
+
+The database schema is managed in a [separate repository](https://github.com/voteagora/queries).
+
+### Migration Process
+
+<Steps>
+  <Step title="Pull latest schema">
+    On your local machine:
+
+    ```bash
+    npx prisma db pull
+    ```
+
+    This introspects the production database and updates your Prisma schema.
+  </Step>
+
+  <Step title="Generate Prisma Client">
+    Generate the updated client:
+
+    ```bash
+    npx prisma generate
+    ```
+  </Step>
+
+  <Step title="Test locally">
+    Test the changes locally before deploying:
+
+    ```bash
+    npm run dev
+    ```
+  </Step>
+
+  <Step title="Deploy to production">
+    Commit the updated schema and push:
+
+    ```bash
+    git add prisma/schema.prisma
+    git commit -m "Update Prisma schema"
+    git push origin main
+    ```
+
+    Vercel will automatically rebuild with the new schema.
+  </Step>
+</Steps>
+
+<Info>
+  For more details on database management, see the [Database Manual](https://www.notion.so/argoagora/Database-Manual-7f59ed03bffb4096a2b19e34e2956085).
+</Info>
+
+## Monitoring and Observability
+
+Agora includes built-in OpenTelemetry (OTel) integration for monitoring.
+
+### OpenTelemetry Setup
+
+OpenTelemetry is automatically configured when deploying to Vercel.
+
+**Configuration file**: `instrumentation.ts` (or `instrumentation.js`)
+
+```typescript
+import { registerOTel } from '@vercel/otel';
+
+export function register() {
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    registerOTel('agora-next');
+  }
+}
+```
+
+<Info>
+  The instrumentation file is automatically loaded by Next.js 14+ when present in the project root.
+</Info>
+
+### DataDog Integration
+
+Optionally integrate with DataDog for metrics and monitoring:
+
+<Steps>
+  <Step title="Get DataDog credentials">
+    Sign up at [DataDog](https://www.datadoghq.com/) and get:
+    - API Key
+    - Application Key
+  </Step>
+
+  <Step title="Set environment variables">
+    ```bash
+    ENABLE_DD_METRICS=true
+    DD_API_KEY=your_datadog_api_key
+    DD_APP_KEY=your_datadog_app_key
+    ```
+  </Step>
+
+  <Step title="Configure DataDog agent">
+    DataDog will automatically collect:
+    - Application metrics
+    - Error tracking
+    - Performance monitoring
+    - Custom metrics from your application
+  </Step>
+</Steps>
+
+### Vercel Analytics
+
+Agora includes Vercel Analytics and Speed Insights:
+
+```typescript
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
+
+<Analytics />
+<SpeedInsights />
+```
+
+**Automatic metrics**:
+- Page views
+- Core Web Vitals (LCP, FID, CLS)
+- User interactions
+- Performance data
+
+View analytics in the Vercel dashboard under **Analytics** and **Speed Insights**.
+
+### Monitoring Best Practices
+
+<Check>
+  Monitor these key metrics:
+</Check>
+
+1. **Database Performance**
+   - Query response times
+   - Connection pool usage
+   - Slow query logs
+
+2. **API Performance**
+   - Response times for `/api/*` routes
+   - Error rates
+   - Rate limiting metrics
+
+3. **Blockchain RPC**
+   - Alchemy API usage and rate limits
+   - RPC call success rates
+   - Block synchronization lag
+
+4. **User Experience**
+   - Core Web Vitals
+   - Page load times
+   - Error tracking
+
+5. **Security**
+   - Failed authentication attempts
+   - Suspicious activity patterns
+   - API key usage anomalies
+
+## Production Optimization
+
+### Performance Optimization
+
+<AccordionGroup>
+  <Accordion title="Enable caching">
+    Configure caching for static assets and API responses:
+
+    **In `next.config.js`**:
+    ```javascript
+    module.exports = {
+      // Enable static page generation
+      output: 'standalone',
+      
+      // Configure caching headers
+      async headers() {
+        return [
+          {
+            source: '/assets/:path*',
+            headers: [
+              {
+                key: 'Cache-Control',
+                value: 'public, max-age=31536000, immutable',
+              },
+            ],
+          },
+        ];
+      },
+    };
+    ```
+  </Accordion>
+
+  <Accordion title="Optimize images">
+    Use Next.js Image optimization:
+
+    ```jsx
+    import Image from 'next/image';
+
+    <Image
+      src="/logo.png"
+      width={200}
+      height={100}
+      alt="Logo"
+      priority // for above-the-fold images
+    />
+    ```
+
+    Vercel automatically optimizes images on-demand.
+  </Accordion>
+
+  <Accordion title="Database connection pooling">
+    Use connection pooling to prevent connection exhaustion:
+
+    - Configure `connection_limit` in Prisma
+    - Use PgBouncer or Supabase Pooler
+    - Monitor active connections
+  </Accordion>
+
+  <Accordion title="Bundle size optimization">
+    Analyze and optimize bundle size:
+
+    ```bash
+    npm run analyze
+    ```
+
+    This uses `@next/bundle-analyzer` to visualize bundle composition.
+
+    **Optimization techniques**:
+    - Dynamic imports for large components
+    - Tree shaking unused code
+    - Minimize third-party dependencies
+  </Accordion>
+</AccordionGroup>
+
+### Security Hardening
+
+<Steps>
+  <Step title="Set security headers">
+    Configure security headers in `next.config.js`:
+
+    ```javascript
+    async headers() {
+      return [
+        {
+          source: '/:path*',
+          headers: [
+            { key: 'X-DNS-Prefetch-Control', value: 'on' },
+            { key: 'Strict-Transport-Security', value: 'max-age=63072000' },
+            { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+            { key: 'X-Content-Type-Options', value: 'nosniff' },
+            { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
+          ],
+        },
+      ];
+    }
+    ```
+  </Step>
+
+  <Step title="Rotate secrets regularly">
+    Establish a secret rotation schedule:
+    - JWT secrets: Every 90 days
+    - Private keys: Every 180 days
+    - API keys: Monitor and rotate if compromised
+  </Step>
+
+  <Step title="Enable rate limiting">
+    Implement rate limiting for API routes (if not already configured).
+  </Step>
+
+  <Step title="Monitor for vulnerabilities">
+    Regularly update dependencies:
+
+    ```bash
+    npm audit
+    npm update
+    ```
+  </Step>
+</Steps>
+
+## Deployment Checklist
+
+<Check>
+  Before going live, verify:
+</Check>
+
+- [ ] All environment variables are set in Vercel
+- [ ] Production databases are configured and accessible
+- [ ] SSL certificates are provisioned
+- [ ] Custom domain is configured
+- [ ] Database migrations are applied
+- [ ] Monitoring is configured (OpenTelemetry, DataDog)
+- [ ] Analytics are enabled (Vercel Analytics)
+- [ ] Security headers are configured
+- [ ] API keys are whitelisted (Alchemy, WalletConnect)
+- [ ] Build completes without errors
+- [ ] Application functions correctly on production URL
+- [ ] Wallet connection works
+- [ ] Proposal voting works
+- [ ] Database queries execute successfully
+
+## Rollback Strategy
+
+<Warning>
+  Always have a rollback plan in case of deployment issues.
+</Warning>
+
+### Vercel Rollback
+
+<Steps>
+  <Step title="Via Vercel Dashboard">
+    1. Go to **Deployments**
+    2. Find the last working deployment
+    3. Click **⋯** → **Promote to Production**
+  </Step>
+
+  <Step title="Via CLI">
+    ```bash
+    # List recent deployments
+    vercel ls
+
+    # Promote a specific deployment
+    vercel promote <deployment-url>
+    ```
+  </Step>
+
+  <Step title="Verify rollback">
+    Test the rolled-back deployment to ensure it's working correctly.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Build fails on Vercel">
+    **Common causes**:
+    - Missing environment variables
+    - TypeScript errors
+    - Dependency issues
+
+    **Solution**:
+    1. Check build logs in Vercel dashboard
+    2. Run `npm run build` locally to reproduce
+    3. Fix errors and redeploy
+  </Accordion>
+
+  <Accordion title="Database connection fails">
+    **Verify**:
+    - Database is accessible from Vercel's IP ranges
+    - Connection strings are correct
+    - SSL is configured if required
+    - Connection pool limits are not exceeded
+
+    **Test connection**:
+    ```bash
+    psql "postgresql://user:pass@host:5432/db?sslmode=require"
+    ```
+  </Accordion>
+
+  <Accordion title="Environment variables not updating">
+    Redeploy after changing environment variables:
+
+    1. Update variables in Vercel dashboard
+    2. Go to **Deployments**
+    3. Click **Redeploy** on the latest deployment
+  </Accordion>
+
+  <Accordion title="Slow API responses">
+    **Diagnose**:
+    - Check database query performance
+    - Monitor RPC call times (Alchemy)
+    - Review Vercel function logs
+
+    **Optimize**:
+    - Add database indexes
+    - Implement caching (Redis/Upstash)
+    - Use connection pooling
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand the system architecture
+  </Card>
+  <Card title="Customization" icon="palette" href="/guides/customization">
+    Customize your deployed instance
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/guides/configuration">
+    Environment variables and settings
+  </Card>
+  <Card title="Setup Guide" icon="rocket" href="/guides/setup">
+    Initial setup and prerequisites
+  </Card>
+</CardGroup>

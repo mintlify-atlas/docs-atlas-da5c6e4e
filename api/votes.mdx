@@ -1,0 +1,549 @@
+---
+title: Votes API
+description: Access voting data including vote history, weights, and vote reasons
+---
+
+The Votes API provides access to on-chain and off-chain voting data, including vote history for delegates and proposals.
+
+## Get Votes for Address
+
+<CodeGroup>
+```bash GET /api/common/votes
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://vote.ens.domains/api/common/votes?address=0x1234...5678&blockNumber=18500000&proposalId=123"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://vote.ens.domains/api/common/votes?' + new URLSearchParams({
+    address: '0x1234567890abcdef1234567890abcdef12345678',
+    blockNumber: '18500000',
+    proposalId: '123'
+  }),
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_API_KEY'
+    }
+  }
+);
+const votes = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://vote.ens.domains/api/common/votes',
+    params={
+        'address': '0x1234567890abcdef1234567890abcdef12345678',
+        'blockNumber': '18500000',
+        'proposalId': '123'
+    },
+    headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+votes = response.json()
+```
+</CodeGroup>
+
+**Location in code:** `src/app/api/common/votes/route.ts:3`
+
+### Query Parameters
+
+<ParamField query="address" type="string" required>
+  Ethereum address of the voter
+</ParamField>
+
+<ParamField query="blockNumber" type="number" required>
+  Block number to query votes at
+</ParamField>
+
+<ParamField query="proposalId" type="string" required>
+  Proposal ID to get votes for
+</ParamField>
+
+### Response
+
+Returns all votes (direct and advanced) for the specified address on the proposal.
+
+```json
+[
+  {
+    "transactionHash": "0xabc...123",
+    "address": "0x1234567890abcdef1234567890abcdef12345678",
+    "proposalId": "123",
+    "support": 1,
+    "weight": "50000000000000000000000",
+    "reason": "This proposal improves the protocol.",
+    "blockNumber": "18525000",
+    "params": null,
+    "proposalTitle": "Upgrade Treasury Timelock",
+    "proposalType": "STANDARD"
+  }
+]
+```
+
+## Vote Structure
+
+<ResponseField name="transactionHash" type="string">
+  Transaction hash of the vote
+</ResponseField>
+
+<ResponseField name="address" type="string">
+  Voter's Ethereum address
+</ResponseField>
+
+<ResponseField name="proposalId" type="string">
+  Unique proposal identifier
+</ResponseField>
+
+<ResponseField name="support" type="number">
+  Vote choice:
+  - `0` = Against
+  - `1` = For
+  - `2` = Abstain
+  - For approval voting: option index (0, 1, 2, ...)
+</ResponseField>
+
+<ResponseField name="weight" type="string">
+  Voting power used (in wei for token-based, count for NFT-based)
+</ResponseField>
+
+<ResponseField name="reason" type="string" nullable>
+  Optional vote reason/comment from voter
+</ResponseField>
+
+<ResponseField name="blockNumber" type="string">
+  Block number when vote was cast
+</ResponseField>
+
+<ResponseField name="params" type="string" nullable>
+  Additional vote parameters (for advanced voting types)
+</ResponseField>
+
+<ResponseField name="proposalTitle" type="string">
+  Title of the proposal
+</ResponseField>
+
+<ResponseField name="proposalType" type="string">
+  Type of proposal (STANDARD, APPROVAL, OPTIMISTIC, etc.)
+</ResponseField>
+
+<ResponseField name="timestamp" type="string" nullable>
+  ISO timestamp of the vote
+</ResponseField>
+
+<ResponseField name="citizenType" type="string" nullable>
+  Type of citizen voter (for Optimism Citizens' House)
+</ResponseField>
+
+<ResponseField name="voterMetadata" type="object" nullable>
+  Additional voter metadata
+</ResponseField>
+
+## Get Votes for Delegate
+
+**Location in code:** `src/app/api/common/votes/getVotes.ts:29`
+
+Fetches all votes cast by a specific delegate across all proposals.
+
+### Parameters
+
+```typescript
+{
+  addressOrENSName: string;
+  pagination?: {
+    limit: number;    // Default: 20
+    offset: number;   // Default: 0
+  };
+}
+```
+
+### Response
+
+```json
+{
+  "meta": {
+    "has_next": true,
+    "next_offset": 20,
+    "total_returned": 20,
+    "total_count": 87
+  },
+  "data": [
+    {
+      "transactionHash": "0xabc...123",
+      "address": "0x1234567890abcdef1234567890abcdef12345678",
+      "proposalId": "123",
+      "support": 1,
+      "weight": "50000000000000000000000",
+      "reason": "Strong support for this upgrade.",
+      "blockNumber": "18525000",
+      "proposalTitle": "Upgrade Treasury Timelock",
+      "proposalType": "STANDARD",
+      "timestamp": "2024-01-15T14:23:45Z"
+    }
+  ]
+}
+```
+
+## Get Votes for Proposal
+
+**Location in code:** `src/app/api/common/votes/getVotes.ts:585`
+
+Fetches all votes cast on a specific proposal.
+
+### Parameters
+
+```typescript
+{
+  proposalId: string;
+  pagination?: {
+    limit: number;    // Default: 20, Max: varies by endpoint
+    offset: number;   // Default: 0
+  };
+  sort?: "weight" | "block_number";  // Default: "weight"
+  offchainProposalId?: string;        // For offchain proposals
+}
+```
+
+### Response
+
+```json
+{
+  "meta": {
+    "has_next": true,
+    "next_offset": 20,
+    "total_returned": 20,
+    "total_count": 156
+  },
+  "data": [
+    {
+      "address": "0x1234567890abcdef1234567890abcdef12345678",
+      "support": 1,
+      "weight": "50000000000000000000000",
+      "reason": "Strongly in favor of this proposal.",
+      "transactionHash": "0xabc...123",
+      "blockNumber": "18525000",
+      "proposalId": "123",
+      "proposalTitle": "Upgrade Treasury Timelock",
+      "proposalType": "STANDARD"
+    }
+  ]
+}
+```
+
+## Get Non-Voters for Proposal
+
+**Location in code:** `src/app/api/common/votes/getVotes.ts:443`
+
+Fetches delegates who have not voted on a specific proposal.
+
+### Parameters
+
+```typescript
+{
+  proposalId: string;
+  pagination?: {
+    limit: number;    // Default: 20
+    offset: number;   // Default: 0
+  };
+  offchainProposalId?: string;
+  type?: "TH" | "APP" | "CHAIN" | "USER";  // Voter type
+}
+```
+
+### Voter Types
+
+<ParamField query="type" type="string" default="TH">
+  Type of voters to query:
+  - `TH` = Token House (on-chain voters)
+  - `APP` = Application citizens (Optimism)
+  - `CHAIN` = Chain citizens (Optimism)
+  - `USER` = User citizens (Optimism)
+</ParamField>
+
+### Response
+
+```json
+{
+  "meta": {
+    "has_next": true,
+    "next_offset": 20,
+    "total_returned": 20,
+    "total_count": 1234
+  },
+  "data": [
+    {
+      "delegate": "0x1234567890abcdef1234567890abcdef12345678",
+      "voting_power": "5000000000000000000000",
+      "citizen_type": "app",
+      "voterMetadata": {
+        "name": "Protocol Name",
+        "image": "https://...",
+        "type": "application"
+      },
+      "twitter": "@handle",
+      "discord": "user#1234",
+      "warpcast": null
+    }
+  ]
+}
+```
+
+## Snapshot Votes
+
+**Location in code:** `src/app/api/common/votes/getVotes.ts:308`
+
+The API also supports Snapshot (off-chain) votes.
+
+### Get Snapshot Votes for Delegate
+
+```typescript
+{
+  addressOrENSName: string;
+  pagination?: PaginationParams;
+}
+```
+
+### Get Snapshot Votes for Proposal
+
+```typescript
+{
+  proposalId: string;
+  pagination?: PaginationParams;
+  sort?: string;  // Default: "vp" (voting power)
+}
+```
+
+### Snapshot Vote Structure
+
+```json
+{
+  "id": "0xsnapshotid",
+  "address": "0x1234567890abcdef1234567890abcdef12345678",
+  "createdAt": "2024-01-15T14:23:45Z",
+  "choice": "Option 1",
+  "votingPower": 5000,
+  "title": "Proposal Title",
+  "reason": "I support this because...",
+  "choiceLabels": {
+    "1": "Option 1",
+    "2": "Option 2"
+  }
+}
+```
+
+## Vote Aggregation
+
+Votes from multiple sources are aggregated:
+
+1. **Direct Votes**: Standard on-chain votes via Governor contract
+2. **Advanced Votes**: Votes using Alligator (liquid delegation)
+3. **Snapshot Votes**: Off-chain votes via Snapshot
+4. **Citizen Votes**: Optimism Citizens' House votes
+
+**Location in code:** `src/app/api/common/votes/getVotes.ts:585`
+
+```sql
+-- Vote aggregation query
+SELECT
+  STRING_AGG(transaction_hash,'|') as transaction_hash,
+  proposal_id,
+  voter,
+  support,
+  SUM(weight) as weight,
+  STRING_AGG(distinct reason, '\n --------- \n') as reason,
+  MAX(block_number) as block_number,
+  params
+FROM (
+  SELECT * FROM vote_cast_events WHERE proposal_id = $1
+  UNION ALL
+  SELECT * FROM vote_cast_with_params_events WHERE proposal_id = $1
+  UNION ALL
+  SELECT * FROM citizen_votes WHERE proposal_id = $1
+) t
+GROUP BY proposal_id, voter, support, params
+ORDER BY weight DESC
+```
+
+## Vote Counting
+
+**Location in code:** `src/app/api/common/votes/getVotes.ts:910`
+
+Count the number of distinct proposals a delegate has voted on:
+
+```typescript
+async function getVotesCountForDelegateForAddress({
+  address: string;
+}): Promise<number> {
+  // Returns count of distinct proposals voted on
+}
+```
+
+### Response
+
+```json
+87
+```
+
+## Vote Participation Metrics
+
+**Location in code:** `src/app/api/common/delegates/getDelegates.ts:863`
+
+```typescript
+async function getVoterStats(
+  addressOrENSName: string,
+  blockNumberOrTimestamp?: number
+): Promise<VoterStats> {
+  // Returns participation statistics
+}
+```
+
+### Response
+
+```json
+{
+  "voter": "0x1234567890abcdef1234567890abcdef12345678",
+  "last_10_props": "8",
+  "total_proposals": "100"
+}
+```
+
+## Advanced Voting Types
+
+### Approval Voting
+
+For approval voting proposals, the `support` field contains the option index:
+
+```json
+{
+  "support": 2,        // Voting for option 2
+  "params": "[2]",     // Option index in params
+  "proposalType": "APPROVAL"
+}
+```
+
+### Ranked Choice
+
+Ranked choice votes include multiple options:
+
+```json
+{
+  "support": 1,
+  "params": "[1,3,2]",  // Ranked preferences
+  "proposalType": "RANKED_CHOICE"
+}
+```
+
+### Optimistic Voting
+
+Optimistic proposals can be vetoed:
+
+```json
+{
+  "support": 0,          // 0 = veto
+  "proposalType": "OPTIMISTIC"
+}
+```
+
+## Data Sources
+
+Vote data is aggregated from:
+
+1. **On-chain Events**
+   - `vote_cast_events` - Standard vote events
+   - `vote_cast_with_params_events` - Advanced voting events
+   - `delegate_changed_events` - Delegation changes
+
+2. **Snapshot Database**
+   - `snapshot.votes` - Off-chain votes
+   - `snapshot.proposals` - Off-chain proposals
+
+3. **Citizens' House** (Optimism)
+   - `atlas.votes_with_meta_mat` - Citizen votes with metadata
+
+## Filtering and Sorting
+
+### Sort by Voting Power
+
+```bash
+GET /api/v1/proposals/123/votes?sort=weight
+```
+
+### Sort by Timestamp
+
+```bash
+GET /api/v1/proposals/123/votes?sort=block_number
+```
+
+### Pagination
+
+```bash
+GET /api/v1/proposals/123/votes?limit=50&offset=100
+```
+
+## Use Cases
+
+### Get Delegate Voting History
+
+```javascript
+const response = await fetch(
+  'https://vote.ens.domains/api/common/votes/delegate/0x1234...5678?limit=100',
+  { headers: { 'Authorization': 'Bearer YOUR_API_KEY' } }
+);
+```
+
+### Analyze Proposal Votes
+
+```javascript
+const response = await fetch(
+  'https://vote.ens.domains/api/v1/proposals/123/votes?sort=weight&limit=1000',
+  { headers: { 'Authorization': 'Bearer YOUR_API_KEY' } }
+);
+```
+
+### Find Non-Voters
+
+```javascript
+const response = await fetch(
+  'https://vote.ens.domains/api/v1/proposals/123/non-voters?limit=100',
+  { headers: { 'Authorization': 'Bearer YOUR_API_KEY' } }
+);
+```
+
+### Track Participation
+
+```javascript
+const response = await fetch(
+  'https://vote.ens.domains/api/v1/delegates/0x1234...5678/stats',
+  { headers: { 'Authorization': 'Bearer YOUR_API_KEY' } }
+);
+```
+
+## Error Responses
+
+### Missing Parameters
+
+```json
+{
+  "error": "Missing address, blockNumber, or proposalId",
+  "status": 400
+}
+```
+
+### Invalid Address
+
+```json
+{
+  "error": "Invalid address format",
+  "status": 400
+}
+```
+
+### Proposal Not Found
+
+```json
+{
+  "error": "Proposal not found",
+  "status": 404
+}
+```

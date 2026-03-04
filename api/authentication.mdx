@@ -1,0 +1,351 @@
+---
+title: Authentication
+description: Authenticate API requests using API keys or JWT tokens with wallet signatures
+---
+
+The Agora API supports two authentication methods: API keys for server-to-server communication and JWT tokens for wallet-based authentication.
+
+## Authentication Methods
+
+All API requests must include an `Authorization` header:
+
+```bash
+Authorization: Bearer YOUR_API_KEY_OR_JWT
+```
+
+### API Key Authentication
+
+API keys are recommended for server-to-server integrations. Keys are hashed using SHA-256 before storage.
+
+**Location in code:** `src/app/lib/auth/serverAuth.ts:32`
+
+```typescript
+export async function authenticateApiUser(
+  request: NextRequest
+): Promise<AuthInfo> {
+  const authResponse: AuthInfo = await validateBearerToken(request);
+  
+  if (!authResponse.authenticated) {
+    return authResponse;
+  }
+  
+  // Lookup hashed API key
+  const user = await prisma.api_user.findFirst({
+    where: {
+      api_key: hashApiKey(key),
+    },
+  });
+  
+  if (!user || !user.enabled) {
+    return { authenticated: false, failReason: "Invalid or disabled user" };
+  }
+  
+  return { authenticated: true, userId: user.id };
+}
+```
+
+### JWT Token Authentication
+
+JWT tokens are used for wallet-based authentication and SIWE (Sign-In with Ethereum).
+
+**Location in code:** `src/app/lib/auth/serverAuth.ts:80`
+
+```typescript
+export async function generateJwt(
+  userId: string,
+  roles?: string[] | null,
+  ttl?: number | null,
+  siweData?: SiweData | null
+): Promise<string> {
+  const scope = (roles || []).join(";");
+  const resolvedTtl = ttl || 60 * 60 * 24; // 24 hours default
+  const iat = Math.floor(Date.now() / 1000);
+  const exp = iat + resolvedTtl;
+
+  const payload: JWTPayload = {
+    sub: userId,
+    scope: scope,
+    isBadgeholder: scope.includes(ROLE_BADGEHOLDER),
+    isCitizen: scope.includes(ROLE_CITIZEN),
+    siwe: siweData ? { ...siweData } : undefined,
+  };
+
+  return new SignJWT({ ...payload })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setExpirationTime(exp)
+    .setIssuedAt(iat)
+    .sign(new TextEncoder().encode(process.env.JWT_SECRET));
+}
+```
+
+## API Key Generation
+
+Agora staff can generate API keys using the CLI command:
+
+```bash
+npm run generate-apikey -- \
+  --email user@example.com \
+  --address 0x1234567890abcdef1234567890abcdef12345678 \
+  --chain-id 1 \
+  --description "API access for XYZ integration"
+```
+
+### Parameters
+
+<ParamField path="email" type="string" required>
+  Email address of the API user
+</ParamField>
+
+<ParamField path="address" type="string" required>
+  Ethereum address of the API user
+</ParamField>
+
+<ParamField path="chain-id" type="number" required>
+  Chain ID (1 for mainnet, 10 for Optimism, etc.)
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Description of the API key usage
+</ParamField>
+
+### Adding New Chains
+
+If you need an API key for a new chain, run this SQL against production:
+
+```sql
+INSERT INTO agora."chain" (id, name, created_at, updated_at) 
+VALUES ('10', 'Optimism', '2025-06-09', '2025-06-09');
+```
+
+Where `id` is the chain ID.
+
+## Sign-In with Ethereum (SIWE)
+
+SIWE allows users to authenticate using their wallet signature.
+
+### Enable SIWE
+
+Set the environment variable:
+
+```bash
+NEXT_PUBLIC_SIWE_ENABLED=true
+```
+
+### SIWE Flow
+
+1. **Request Nonce**: Client requests a nonce from the server
+2. **Sign Message**: User signs a structured message with their wallet
+3. **Verify Signature**: Server verifies the signature and issues a JWT
+4. **Use JWT**: Client includes JWT in subsequent requests
+
+### SIWE Message Structure
+
+```typescript
+type SiweData = {
+  address: string;
+  chainId: string;
+  nonce: string;
+};
+```
+
+### Example SIWE Implementation
+
+```javascript
+import { SiweMessage } from 'siwe';
+
+// 1. Create SIWE message
+const message = new SiweMessage({
+  domain: window.location.host,
+  address: walletAddress,
+  statement: 'Sign in to Agora',
+  uri: window.location.origin,
+  version: '1',
+  chainId: 1,
+  nonce: await getNonce(), // Get from server
+});
+
+// 2. Sign message with wallet
+const signature = await wallet.signMessage(message.prepareMessage());
+
+// 3. Verify and get JWT
+const response = await fetch('/api/auth/verify', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ message, signature }),
+});
+
+const { token } = await response.json();
+
+// 4. Use JWT for authenticated requests
+const data = await fetch('/api/v1/proposals', {
+  headers: { 'Authorization': `Bearer ${token}` },
+});
+```
+
+## Roles and Permissions
+
+The API supports role-based access control (RBAC):
+
+**Location in code:** `src/app/lib/auth/serverAuth.ts:129`
+
+```typescript
+export async function getRolesForUser(
+  userId: string,
+  siweData?: SiweMessage | null
+): Promise<string[]> {
+  const roles = [ROLE_PUBLIC_READER];
+  
+  if (siweData) {
+    roles.push(ROLE_RF_DEMO_USER); // All SIWE users
+    
+    const { isBadgeholder, votingCategory, isCitizen } = 
+      await fetchBadgeholder(siweData.address);
+    
+    if (votingCategory) roles.push(votingCategory);
+    if (isBadgeholder) roles.push(ROLE_BADGEHOLDER);
+    if (isCitizen) roles.push(ROLE_CITIZEN);
+  }
+  
+  return roles;
+}
+```
+
+### Available Roles
+
+| Role | Description |
+|------|-------------|
+| `public_reader` | Read access to public data (default) |
+| `badgeholder` | Retro Funding badgeholder permissions |
+| `citizen` | Citizen house voting permissions |
+| `rf_demo_user` | Retro Funding demo access |
+| `category:*` | Category-specific permissions |
+
+### JWT Payload
+
+```json
+{
+  "sub": "0x1234...5678",
+  "scope": "public_reader;badgeholder;category:GOVERNANCE",
+  "isBadgeholder": true,
+  "isCitizen": false,
+  "category": "GOVERNANCE",
+  "siwe": {
+    "address": "0x1234...5678",
+    "chainId": "1",
+    "nonce": "abc123"
+  },
+  "iat": 1640000000,
+  "exp": 1640086400
+}
+```
+
+## Authentication Headers
+
+### API Key Request
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  https://vote.ens.domains/api/v1/proposals
+```
+
+### JWT Request
+
+```bash
+curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  https://vote.ens.domains/api/v1/proposals
+```
+
+## Security Best Practices
+
+1. **Never expose API keys** in client-side code or public repositories
+2. **Use environment variables** to store sensitive credentials
+3. **Rotate keys regularly** for production environments
+4. **Use HTTPS** for all API requests
+5. **Monitor API usage** in provider dashboards
+6. **Set appropriate permissions** based on the principle of least privilege
+
+## Environment Variables
+
+### JWT Secret
+
+```bash
+JWT_SECRET=your-secret-key-minimum-32-characters
+```
+
+**Required:** YES  
+**Security:** CRITICAL - Must be strong and unique per environment
+
+### Gas Sponsor Private Key
+
+```bash
+GAS_SPONSOR_PK=your-private-key-hex-string
+```
+
+**Required:** For gasless transactions  
+**Security:** CRITICAL - Never expose in client code
+
+### Database URLs
+
+```bash
+READ_WRITE_WEB2_DATABASE_URL_PROD=postgres://...
+READ_ONLY_WEB3_DATABASE_URL_PROD=postgres://...
+```
+
+**Required:** YES  
+**Usage:** User data and blockchain indexed data
+
+## Error Responses
+
+### Missing Authentication
+
+```json
+{
+  "error": "Missing or invalid bearer token",
+  "status": 401
+}
+```
+
+### Disabled User
+
+```json
+{
+  "error": "User account is disabled",
+  "status": 401
+}
+```
+
+### Expired JWT
+
+```json
+{
+  "error": "JWT token has expired",
+  "status": 401
+}
+```
+
+### Insufficient Permissions
+
+```json
+{
+  "error": "Unauthorized to perform action on this address",
+  "status": 401
+}
+```
+
+## Testing Authentication
+
+### Test API Key
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  https://vote.ens.domains/api/v1/proposals?limit=1
+```
+
+### Test JWT
+
+```bash
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  https://vote.ens.domains/api/v1/proposals?limit=1
+```
+
+Successful authentication returns a `200` status with proposal data. Failed authentication returns `401` with an error message.

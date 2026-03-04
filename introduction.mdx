@@ -1,0 +1,236 @@
+---
+title: "Introduction to Agora"
+description: "A comprehensive onchain governance platform for DAOs built with Next.js, React, and TypeScript"
+---
+
+## What is Agora?
+
+Agora is a powerful, open-source onchain governance platform designed for decentralized autonomous organizations (DAOs). It provides a complete solution for transparent, efficient governance with proposals, delegation, voting, and community forums.
+
+<Note>
+  Agora powers governance for leading DAOs including **ENS**, **Optimism**, and **Uniswap**.
+</Note>
+
+## Key Features
+
+Agora offers a comprehensive suite of governance tools that enable your DAO to make transparent, efficient decisions onchain.
+
+<CardGroup cols={2}>
+  <Card title="Proposal Management" icon="file-contract">
+    Create, manage, and execute governance proposals with full onchain support. Track proposal lifecycle from draft to execution.
+  </Card>
+  
+  <Card title="Delegation System" icon="users">
+    Delegate voting power to trusted representatives. Build a robust delegate network with profiles, statements, and endorsements.
+  </Card>
+  
+  <Card title="Flexible Voting" icon="check-to-slot">
+    Support multiple voting mechanisms including standard voting, approval voting, and ranked choice. Enable gasless voting through meta-transactions.
+  </Card>
+  
+  <Card title="Community Forums" icon="comments">
+    Integrated discussion platform powered by Duna. Enable community discourse with topics, posts, reactions, and moderation tools.
+  </Card>
+  
+  <Card title="Multi-Tenant Architecture" icon="building">
+    Run multiple DAOs on a single platform with isolated configurations, data, and customizations for each tenant.
+  </Card>
+  
+  <Card title="EAS Attestations" icon="certificate">
+    Verify delegates and actions using Ethereum Attestation Service (EAS) for added trust and transparency.
+  </Card>
+</CardGroup>
+
+## Who Uses Agora?
+
+Agora is trusted by some of the most prominent DAOs in the ecosystem:
+
+<Steps>
+  <Step title="ENS (Ethereum Name Service)">
+    Manages governance for the Ethereum naming system with delegate voting and proposal execution.
+  </Step>
+  
+  <Step title="Optimism">
+    Powers the Optimism Collective's governance including RetroPGF rounds and token house voting.
+  </Step>
+  
+  <Step title="Uniswap">
+    Handles governance proposals and voting for the leading decentralized exchange protocol.
+  </Step>
+</Steps>
+
+Additional DAOs using Agora include Derive, Cyber, Xai, Boost, Scroll, Linea, EtherFi, B3, and Protocol Guild.
+
+## Why Choose Agora?
+
+### Built for Scale
+
+Agora's multi-tenant architecture allows you to run multiple DAO instances on a single platform. Each tenant has:
+
+- **Isolated data**: Separate PostgreSQL schemas for each DAO namespace
+- **Custom configuration**: Tenant-specific contracts, tokens, and UI settings
+- **Flexible deployment**: Support for different chains and governance models
+
+### Production-Ready
+
+Agora is a battle-tested platform with:
+
+- **PostgreSQL + Prisma ORM**: Robust data persistence with views and materialized views
+- **Next.js App Router**: Server-side rendering and optimal performance
+- **TypeScript**: Type-safe codebase with comprehensive interfaces
+- **OpenTelemetry**: Built-in observability and monitoring
+
+### Developer-Friendly
+
+- **REST API**: Comprehensive API for proposals, delegates, votes, and analytics
+- **React Components**: Reusable UI components with SCSS modules and Tailwind
+- **Extensible**: Add custom features, voting mechanisms, and integrations
+
+## Architecture Overview
+
+Agora follows a modern web application architecture:
+
+```
+┌─────────────────────────────────────────────────┐
+│              Next.js Frontend                    │
+│  (React, TypeScript, Tailwind, ConnectKit)      │
+└────────────────┬────────────────────────────────┘
+                 │
+                 ↓
+┌─────────────────────────────────────────────────┐
+│              Next.js API Routes                  │
+│     (REST API, Server Actions, Prisma)          │
+└────────────────┬────────────────────────────────┘
+                 │
+        ┌────────┴────────┐
+        ↓                 ↓
+┌───────────────┐  ┌──────────────────┐
+│  PostgreSQL   │  │  Blockchain RPCs │
+│   (Prisma)    │  │  (Alchemy, etc.) │
+└───────────────┘  └──────────────────┘
+```
+
+<Info>
+  Learn more about the architecture in the [Architecture Guide](/architecture).
+</Info>
+
+## Technology Stack
+
+Agora is built with modern web technologies:
+
+<AccordionGroup>
+  <Accordion title="Frontend">
+    - **Next.js 14**: React framework with App Router
+    - **React 18**: UI component library
+    - **TypeScript**: Type-safe JavaScript
+    - **Tailwind CSS**: Utility-first CSS framework
+    - **ConnectKit**: Wallet connection library
+    - **Wagmi & Viem**: Ethereum interactions
+  </Accordion>
+  
+  <Accordion title="Backend">
+    - **Next.js API Routes**: Serverless API endpoints
+    - **Prisma**: Type-safe ORM for PostgreSQL
+    - **PostgreSQL**: Relational database with multi-schema support
+    - **OpenTelemetry**: Distributed tracing and observability
+  </Accordion>
+  
+  <Accordion title="Blockchain">
+    - **Ethers.js v6**: Ethereum library
+    - **Alchemy**: RPC provider
+    - **EAS (Ethereum Attestation Service)**: Onchain attestations
+    - **SIWE (Sign-In with Ethereum)**: Authentication
+  </Accordion>
+  
+  <Accordion title="External Services">
+    - **Pinata**: IPFS storage for proposal metadata
+    - **Tenderly**: Transaction simulation
+    - **WalletConnect**: Multi-wallet support
+    - **Snapshot**: Off-chain voting (optional)
+    - **Meilisearch**: Full-text search for forums
+  </Accordion>
+</AccordionGroup>
+
+## Core Concepts
+
+### Tenants
+
+Each DAO is a "tenant" with its own:
+- **Namespace**: Unique identifier (e.g., `ens`, `optimism`, `uniswap`)
+- **Contracts**: Governor, token, timelock, and optional staking contracts
+- **Token**: ERC20 or ERC721 governance token
+- **UI Configuration**: Custom branding, features, and toggles
+- **Database Schema**: Isolated data in PostgreSQL
+
+### Proposals
+
+Proposals are the core governance primitive:
+- **Types**: Standard, temp checks, approval voting, ranked choice
+- **Lifecycle**: Draft → Active → Succeeded/Defeated → Queued → Executed
+- **Metadata**: Title, description, transactions, voting parameters
+- **Storage**: PostgreSQL + optional IPFS for descriptions
+
+### Delegation
+
+Voting power can be delegated:
+- **Direct Delegation**: Delegate to a single address
+- **Partial Delegation**: Split voting power (Alligator)
+- **Sub-delegation**: Delegates can re-delegate (chain of authority)
+- **Profiles**: Delegates create statements with social links
+
+### Voting
+
+Multiple voting mechanisms are supported:
+- **Onchain Voting**: Direct contract interactions
+- **Gasless Voting**: Meta-transactions with signature verification
+- **Vote Types**: For, Against, Abstain
+- **Advanced Voting**: Approval voting, ranked choice (Optimism)
+
+## Getting Started
+
+Ready to deploy Agora for your DAO? Follow our comprehensive guides:
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Set up Agora locally and create your first proposal in minutes.
+  </Card>
+  
+  <Card title="Architecture Guide" icon="sitemap" href="/architecture">
+    Understand Agora's system design, database schema, and key components.
+  </Card>
+  
+  <Card title="Configuration Guide" icon="gear" href="/guides/configuration">
+    Configure environment variables, contracts, and tenant settings.
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore the REST API for proposals, delegates, votes, and more.
+  </Card>
+</CardGroup>
+
+## Community and Support
+
+Agora is open source and actively maintained by the team at [Agora](https://www.agora.vote/).
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/voteagora/agora-next">
+    View source code, open issues, and contribute to development.
+  </Card>
+  
+  <Card title="Discord Community" icon="discord">
+    Join the community for support, discussions, and collaboration.
+  </Card>
+</CardGroup>
+
+<Warning>
+  Before deploying to production, make sure to review the security best practices in the [Deployment Guide](/guides/deployment).
+</Warning>
+
+## Next Steps
+
+Now that you understand what Agora is, choose your path:
+
+- **New to Agora?** Start with the [Quickstart Guide](/quickstart)
+- **Technical deep dive?** Read the [Architecture Guide](/architecture)
+- **Deploying to production?** Check the [Deployment Guide](/guides/deployment)
+- **Building integrations?** Explore the [API Reference](/api/overview)

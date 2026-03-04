@@ -1,0 +1,561 @@
+---
+title: Delegates API
+description: Access delegate information including voting power, delegators, and participation metrics
+---
+
+The Delegates API provides access to governance delegates, their voting power, delegators, and participation statistics.
+
+## List Delegates
+
+<CodeGroup>
+```bash GET /api/v1/delegates
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://vote.ens.domains/api/v1/delegates?limit=20&sort=voting_power"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://vote.ens.domains/api/v1/delegates?limit=20&sort=voting_power',
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_API_KEY'
+    }
+  }
+);
+const delegates = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://vote.ens.domains/api/v1/delegates',
+    params={'limit': 20, 'sort': 'voting_power'},
+    headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+delegates = response.json()
+```
+</CodeGroup>
+
+**Location in code:** `src/app/api/common/delegates/getDelegates.ts:59`
+
+### Query Parameters
+
+<ParamField query="limit" type="number" default="500">
+  Number of delegates to return (max: 500)
+</ParamField>
+
+<ParamField query="offset" type="number" default="0">
+  Number of delegates to skip for pagination
+</ParamField>
+
+<ParamField query="sort" type="string" default="voting_power">
+  Sort order:
+  - `voting_power` - Highest voting power first (default)
+  - `least_voting_power` - Lowest voting power first
+  - `most_delegators` - Most delegators first
+  - `weighted_random` - Weighted random order (requires `seed`)
+  - `most_recent_delegation` - Most recently delegated to
+  - `oldest_delegation` - Oldest delegation first
+  - `latest_voting_block` - Most recent vote first
+  - `vp_change_7d` - Largest VP increase (7 days)
+  - `vp_change_7d_desc` - Largest VP decrease (7 days)
+</ParamField>
+
+<ParamField query="seed" type="number" optional>
+  Random seed for `weighted_random` sort (must be between 0 and 1)
+</ParamField>
+
+<ParamField query="delegator" type="string" optional>
+  Filter to delegates that a specific address has delegated to (Ethereum address)
+</ParamField>
+
+<ParamField query="issues" type="string" optional>
+  Comma-separated list of issues to filter by (from delegate statements)
+</ParamField>
+
+<ParamField query="stakeholders" type="string" optional>
+  Filter by stakeholder type in delegate statements
+</ParamField>
+
+<ParamField query="endorsed" type="boolean" optional>
+  Filter to only endorsed delegates
+</ParamField>
+
+<ParamField query="hasStatement" type="boolean" optional>
+  Filter to delegates with a statement (minimum 10 characters)
+</ParamField>
+
+<ParamField query="showParticipation" type="boolean" optional>
+  Include participation rate in response
+</ParamField>
+
+### Response
+
+<ResponseField name="meta" type="object">
+  Pagination metadata
+  <Expandable title="properties">
+    <ResponseField name="has_next" type="boolean">
+      Whether more results are available
+    </ResponseField>
+    <ResponseField name="next_offset" type="number">
+      Offset for the next page
+    </ResponseField>
+    <ResponseField name="total_returned" type="number">
+      Number of delegates in current response
+    </ResponseField>
+    <ResponseField name="total_count" type="number">
+      Total number of delegates matching filters
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of delegate objects
+  <Expandable title="properties">
+    <ResponseField name="address" type="string">
+      Delegate's Ethereum address
+    </ResponseField>
+    <ResponseField name="votingPower" type="object">
+      Voting power breakdown
+      <Expandable title="properties">
+        <ResponseField name="total" type="string">
+          Total voting power
+        </ResponseField>
+        <ResponseField name="direct" type="string">
+          Direct delegations
+        </ResponseField>
+        <ResponseField name="advanced" type="string">
+          Advanced/partial delegations
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="numOfDelegators" type="string">
+      Number of addresses delegating to this delegate
+    </ResponseField>
+    <ResponseField name="statement" type="object" nullable>
+      Delegate statement (if exists)
+      <Expandable title="properties">
+        <ResponseField name="signature" type="string">
+          Statement signature
+        </ResponseField>
+        <ResponseField name="payload" type="object">
+          Statement content
+        </ResponseField>
+        <ResponseField name="twitter" type="string" nullable>
+          Twitter handle
+        </ResponseField>
+        <ResponseField name="discord" type="string" nullable>
+          Discord handle
+        </ResponseField>
+        <ResponseField name="warpcast" type="string" nullable>
+          Warpcast handle
+        </ResponseField>
+        <ResponseField name="endorsed" type="boolean">
+          Whether delegate is endorsed
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    <ResponseField name="participation" type="number">
+      Participation rate (0-100)
+    </ResponseField>
+    <ResponseField name="mostRecentDelegationBlock" type="string">
+      Block of most recent delegation
+    </ResponseField>
+    <ResponseField name="lastVoteBlock" type="string">
+      Block of most recent vote
+    </ResponseField>
+    <ResponseField name="vpChange7d" type="string">
+      Voting power change in last 7 days
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="seed" type="number" optional>
+  Random seed used (only for weighted_random sort)
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "meta": {
+    "has_next": true,
+    "next_offset": 20,
+    "total_returned": 20,
+    "total_count": 1542
+  },
+  "data": [
+    {
+      "address": "0x1234567890abcdef1234567890abcdef12345678",
+      "votingPower": {
+        "total": "5000000000000000000000",
+        "direct": "4500000000000000000000",
+        "advanced": "500000000000000000000"
+      },
+      "numOfDelegators": "142",
+      "statement": {
+        "signature": "0xabc...123",
+        "payload": {
+          "delegateStatement": "I am committed to governance...",
+          "topIssues": [
+            {"type": "security", "value": "Smart contract security"},
+            {"type": "growth", "value": "Protocol growth"}
+          ],
+          "topStakeholders": [
+            {"type": "developers"}
+          ]
+        },
+        "twitter": "@delegate_handle",
+        "discord": "delegate#1234",
+        "warpcast": null,
+        "endorsed": true
+      },
+      "participation": 87.5,
+      "mostRecentDelegationBlock": "18500000",
+      "lastVoteBlock": "18525000",
+      "vpChange7d": "100000000000000000000"
+    }
+  ]
+}
+```
+
+## Get Single Delegate
+
+<CodeGroup>
+```bash GET /api/v1/delegates/{address}
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://vote.ens.domains/api/v1/delegates/0x1234...5678"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://vote.ens.domains/api/v1/delegates/0x1234...5678',
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_API_KEY'
+    }
+  }
+);
+const delegate = await response.json();
+```
+</CodeGroup>
+
+**Location in code:** `src/app/api/common/delegates/getDelegates.ts:647`
+
+### Path Parameters
+
+<ParamField path="address" type="string" required>
+  Ethereum address or ENS name of the delegate
+</ParamField>
+
+### Response
+
+<ResponseField name="address" type="string">
+  Delegate's Ethereum address
+</ResponseField>
+
+<ResponseField name="votingPower" type="object">
+  Voting power breakdown (total, direct, advanced)
+</ResponseField>
+
+<ResponseField name="votingPowerRelativeToVotableSupply" type="number">
+  Voting power as percentage of votable supply
+</ResponseField>
+
+<ResponseField name="votingPowerRelativeToQuorum" type="number">
+  Voting power as percentage of quorum
+</ResponseField>
+
+<ResponseField name="proposalsCreated" type="string">
+  Number of proposals created by this delegate
+</ResponseField>
+
+<ResponseField name="proposalsVotedOn" type="string">
+  Number of proposals voted on
+</ResponseField>
+
+<ResponseField name="votedFor" type="string">
+  Total FOR votes cast
+</ResponseField>
+
+<ResponseField name="votedAgainst" type="string">
+  Total AGAINST votes cast
+</ResponseField>
+
+<ResponseField name="votedAbstain" type="string">
+  Total ABSTAIN votes cast
+</ResponseField>
+
+<ResponseField name="votingParticipation" type="number">
+  Participation rate (0-1)
+</ResponseField>
+
+<ResponseField name="lastTenProps" type="string">
+  Votes on last 10 proposals
+</ResponseField>
+
+<ResponseField name="numOfDelegators" type="string">
+  Number of delegators
+</ResponseField>
+
+<ResponseField name="totalProposals" type="number">
+  Total proposals in DAO
+</ResponseField>
+
+<ResponseField name="statement" type="object" nullable>
+  Delegate statement (if exists)
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "address": "0x1234567890abcdef1234567890abcdef12345678",
+  "votingPower": {
+    "total": "5000000000000000000000",
+    "direct": "4500000000000000000000",
+    "advanced": "500000000000000000000"
+  },
+  "votingPowerRelativeToVotableSupply": 0.025,
+  "votingPowerRelativeToQuorum": 1.25,
+  "proposalsCreated": "3",
+  "proposalsVotedOn": "87",
+  "votedFor": "3500000000000000000000",
+  "votedAgainst": "1200000000000000000000",
+  "votedAbstain": "300000000000000000000",
+  "votingParticipation": 0.875,
+  "lastTenProps": "8",
+  "numOfDelegators": "142",
+  "totalProposals": 100,
+  "statement": {
+    "signature": "0xabc...123",
+    "payload": {
+      "delegateStatement": "I am committed to responsible governance...",
+      "topIssues": [...],
+      "topStakeholders": [...]
+    },
+    "twitter": "@delegate_handle",
+    "endorsed": true
+  }
+}
+```
+
+## Delegate Voting Power
+
+Voting power is composed of:
+
+1. **Direct Delegations**: Standard ERC-20/ERC-721 delegations
+2. **Advanced Delegations**: Partial delegations via Alligator (liquid delegation)
+
+```typescript
+votingPower = {
+  total: direct + advanced,
+  direct: sum of direct delegations,
+  advanced: sum of partial delegations
+}
+```
+
+## Data Sources
+
+Delegate data is fetched from:
+
+1. **DAO Node Service** - Primary source with 30s cache
+2. **PostgreSQL Views** - Fallback and additional metadata
+   - `{namespace}.delegates` - Voting power and delegator counts
+   - `{namespace}.voter_stats` - Participation metrics
+   - `agora.delegate_statements` - Statements and social profiles
+
+**Location in code:** `src/app/api/common/delegates/getDelegates.ts:32`
+
+## Filtering Examples
+
+### Filter by Delegator
+
+Get all delegates that a specific address has delegated to:
+
+```bash
+GET /api/v1/delegates?delegator=0xYourAddress
+```
+
+### Filter by Issues
+
+Find delegates focused on specific issues:
+
+```bash
+GET /api/v1/delegates?issues=security,growth
+```
+
+### Filter by Statement
+
+Only delegates with a statement:
+
+```bash
+GET /api/v1/delegates?hasStatement=true
+```
+
+### Endorsed Delegates Only
+
+```bash
+GET /api/v1/delegates?endorsed=true
+```
+
+### Combined Filters
+
+```bash
+GET /api/v1/delegates?endorsed=true&hasStatement=true&issues=security&sort=voting_power
+```
+
+## Sorting Examples
+
+### By Voting Power (Default)
+
+```bash
+GET /api/v1/delegates?sort=voting_power
+```
+
+### By Number of Delegators
+
+```bash
+GET /api/v1/delegates?sort=most_delegators
+```
+
+### By Recent Activity
+
+```bash
+GET /api/v1/delegates?sort=latest_voting_block
+```
+
+### Weighted Random (for fair sampling)
+
+```bash
+GET /api/v1/delegates?sort=weighted_random&seed=0.42
+```
+
+### By VP Change
+
+```bash
+# Biggest gainers
+GET /api/v1/delegates?sort=vp_change_7d
+
+# Biggest losers
+GET /api/v1/delegates?sort=vp_change_7d_desc
+```
+
+## Delegate Statements
+
+Delegates can publish statements that include:
+
+- **Delegate Statement**: Text description of governance philosophy
+- **Top Issues**: Issues they care about (e.g., security, growth, community)
+- **Top Stakeholders**: Who they represent (e.g., developers, users, protocols)
+- **Social Profiles**: Twitter, Discord, Warpcast handles
+- **Endorsed Status**: Whether endorsed by the DAO
+
+### Statement Structure
+
+```typescript
+statement: {
+  signature: string;           // EIP-712 signature
+  payload: {
+    delegateStatement: string; // Main statement text
+    topIssues: Array<{
+      type: string;            // Issue category
+      value: string;           // Specific issue
+    }>;
+    topStakeholders: Array<{
+      type: string;            // Stakeholder category
+    }>;
+  };
+  twitter: string | null;      // Twitter handle
+  discord: string | null;      // Discord username
+  warpcast: string | null;     // Warpcast username
+  endorsed: boolean;           // Endorsement status
+  created_at: Date;
+  updated_at: Date;
+}
+```
+
+## Delegation Models
+
+The API supports different delegation models:
+
+### Direct Delegation (ERC-20)
+
+```typescript
+// Standard token delegation
+token.delegate(delegateAddress);
+```
+
+### Direct Delegation (ERC-721)
+
+```typescript
+// NFT-based delegation
+nft.delegate(delegateAddress);
+```
+
+### Partial Delegation (Alligator)
+
+```typescript
+// Delegate a portion of voting power
+alligator.subDelegate(toAddress, amount, rules);
+```
+
+## Advanced Use Cases
+
+### Get Top Delegates
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://vote.ens.domains/api/v1/delegates?limit=10&sort=voting_power"
+```
+
+### Get Active Delegates
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://vote.ens.domains/api/v1/delegates?sort=latest_voting_block&limit=50"
+```
+
+### Get Delegates with High Participation
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://vote.ens.domains/api/v1/delegates?showParticipation=true&sort=voting_power&limit=100"
+```
+
+### Find Delegates for Specific Issues
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://vote.ens.domains/api/v1/delegates?issues=security,privacy&endorsed=true"
+```
+
+## Error Responses
+
+### Invalid Address Format
+
+```json
+{
+  "error": "Invalid address format",
+  "status": 400
+}
+```
+
+### Delegate Not Found
+
+```json
+{
+  "error": "Delegate not found",
+  "status": 404
+}
+```
+
+### Invalid Sort Parameter
+
+```json
+{
+  "error": "Invalid sort parameter",
+  "status": 400
+}
+```

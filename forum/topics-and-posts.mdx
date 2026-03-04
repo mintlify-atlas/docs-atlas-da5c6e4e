@@ -1,0 +1,424 @@
+---
+title: 'Topics and Posts'
+description: 'Create, manage, and moderate forum topics and posts with the Agora Forum system'
+---
+
+## Overview
+
+Topics and posts are the core building blocks of the forum system. Topics represent discussion threads, while posts contain the actual content and replies.
+
+## Creating Topics
+
+### Using the useForum Hook
+
+```typescript
+import { useForum } from '@/hooks/useForum';
+
+function CreateTopicForm() {
+  const { createTopic, loading } = useForum();
+  
+  const handleSubmit = async (title: string, content: string, categoryId?: number) => {
+    const result = await createTopic(title, content, categoryId);
+    
+    if (result?.success) {
+      console.log('Topic created:', result.data);
+    }
+  };
+}
+```
+
+### Server Action
+
+The `createForumTopic` server action handles topic creation:
+
+```typescript src/lib/actions/forum/topics.ts
+export async function createForumTopic(
+  data: z.infer<typeof createTopicSchema>
+) {
+  // 1. Verify wallet signature
+  const isValid = await verifyMessage({
+    address: validatedData.address as `0x${string}`,
+    message: validatedData.message,
+    signature: validatedData.signature as `0x${string}`,
+  });
+
+  // 2. Check voting power requirements
+  const votingPowerBigInt = await fetchVotingPowerFromContract(
+    client,
+    validatedData.address,
+    { namespace: tenant.namespace, contracts: tenant.contracts }
+  );
+  
+  const currentVP = formatVotingPower(votingPowerBigInt);
+  const vpCheck = await canCreateTopic(currentVP, slug);
+
+  // 3. Moderate content for NSFW
+  const combinedText = `${validatedData.title}\n\n${validatedData.content}`;
+  const moderation = await moderateTextContent(combinedText);
+  isNsfw = isContentNSFW(moderation);
+
+  // 4. Create topic and initial post
+  const newTopic = await prismaWeb2Client.forumTopic.create({
+    data: {
+      title: validatedData.title,
+      address: validatedData.address,
+      dao_slug: slug,
+      categoryId: validatedData.categoryId || null,
+      isNsfw,
+    },
+  });
+
+  const newPost = await prismaWeb2Client.forumPost.create({
+    data: {
+      content: validatedData.content,
+      address: validatedData.address,
+      topicId: newTopic.id,
+      dao_slug: slug,
+      isNsfw,
+    },
+  });
+
+  // 5. Index for search
+  await indexForumTopic({
+    topicId: newTopic.id,
+    daoSlug: slug,
+    title: validatedData.title,
+    content: validatedData.content,
+    author: validatedData.address,
+    categoryId: validatedData.categoryId,
+    createdAt: newTopic.createdAt,
+  });
+
+  return { success: true, data: { topic: newTopic, post: newPost } };
+}
+```
+
+## Fetching Topics
+
+### Get Topics with Pagination
+
+```typescript
+import { getForumTopics } from '@/lib/actions/forum/topics';
+
+const result = await getForumTopics({
+  categoryId: 1,              // Optional: filter by category
+  excludeCategoryNames: [],   // Optional: exclude categories
+  limit: 20,                  // Number of topics per page
+  offset: 0,                  // Pagination offset
+});
+
+if (result.success) {
+  console.log('Topics:', result.data);
+}
+```
+
+### Get Single Topic
+
+```typescript
+import { getForumTopic } from '@/lib/actions/forum/topics';
+
+const result = await getForumTopic(topicId);
+
+if (result.success) {
+  const topic = result.data;
+  console.log('Topic:', topic.title);
+  console.log('Posts:', topic.posts);
+  console.log('Reactions:', topic.topicReactionsByEmoji);
+}
+```
+
+## Creating Posts (Replies)
+
+### Reply to a Topic
+
+```typescript
+import { useForum } from '@/hooks/useForum';
+
+function ReplyForm({ topicId }: { topicId: number }) {
+  const { createPost, loading } = useForum();
+  
+  const handleReply = async (content: string, parentPostId?: number) => {
+    const result = await createPost(topicId, content, parentPostId);
+    
+    if (result?.success) {
+      console.log('Reply posted:', result.data);
+    }
+  };
+}
+```
+
+### Server Action for Posts
+
+```typescript src/lib/actions/forum/posts.ts
+export async function createForumPost(
+  topicId: number,
+  data: z.infer<typeof createPostSchema>
+) {
+  // Verify signature
+  const isValid = await verifyMessage({
+    address: validatedData.address,
+    message: validatedData.message,
+    signature: validatedData.signature,
+  });
+
+  // Moderate content
+  const moderation = await moderateTextContent(validatedData.content);
+  const isNsfw = isContentNSFW(moderation);
+
+  // Create post
+  const newPost = await prismaWeb2Client.forumPost.create({
+    data: {
+      content: validatedData.content,
+      address: validatedData.address,
+      topicId,
+      parentPostId: validatedData.parentPostId,
+      dao_slug: slug,
+      isNsfw,
+    },
+  });
+
+  // Create attachments from content
+  await createAttachmentsFromContent(
+    validatedData.content,
+    validatedData.address,
+    'post',
+    newPost.id
+  );
+
+  // Index for search
+  await indexForumPost({
+    postId: newPost.id,
+    daoSlug: slug,
+    content: validatedData.content,
+    author: validatedData.address,
+    topicId,
+    topicTitle: topic.title,
+    parentPostId: validatedData.parentPostId,
+    createdAt: newPost.createdAt,
+  });
+
+  return { success: true, data: newPost };
+}
+```
+
+## Upvoting Topics
+
+Users can upvote topics to show support and surface quality content.
+
+### Upvote a Topic
+
+```typescript
+import { upvoteForumTopic, removeUpvoteForumTopic } from '@/lib/actions/forum/topics';
+
+// Add upvote
+const result = await upvoteForumTopic({
+  postId: firstPostId,  // Upvotes target the first post of a topic
+  address: userAddress,
+  signature,
+  message,
+});
+
+// Remove upvote
+const result = await removeUpvoteForumTopic({
+  postId: firstPostId,
+  address: userAddress,
+  signature,
+  message,
+});
+```
+
+### Get Upvote Count
+
+```typescript
+import { getForumTopicUpvotes } from '@/lib/actions/forum/topics';
+
+const result = await getForumTopicUpvotes(topicId);
+console.log('Upvotes:', result.data);
+```
+
+## Voting Power Requirements
+
+<Warning>
+  Users need sufficient voting power to create topics and posts. This is checked against the DAO's token contract.
+</Warning>
+
+```typescript
+import { canCreateTopic, canPerformAction } from '@/lib/forumSettings';
+
+// Check if user can create topics
+const vpCheck = await canCreateTopic(currentVP, daoSlug);
+
+if (!vpCheck.allowed) {
+  console.error('Insufficient voting power:', vpCheck.message);
+}
+
+// Check for other actions (posts, reactions)
+const actionCheck = await canPerformAction(currentVP, daoSlug);
+```
+
+## Content Moderation
+
+### Automatic NSFW Detection
+
+All content is automatically moderated using the OpenAI moderation API:
+
+```typescript
+import { moderateTextContent, isContentNSFW } from '@/lib/moderation';
+
+const moderation = await moderateTextContent(content);
+const isNsfw = isContentNSFW(moderation);
+
+if (isNsfw) {
+  // Content flagged as NSFW - will be hidden from public view
+}
+```
+
+### Soft Delete
+
+Admins can soft delete content, which hides it but allows recovery:
+
+```typescript src/lib/actions/forum/topics.ts
+export async function softDeleteForumTopic(data) {
+  await prismaWeb2Client.forumTopic.update({
+    where: { id: topicId },
+    data: {
+      deletedAt: new Date(),
+      deletedBy: address,
+    },
+  });
+
+  // Remove from search index
+  await removeForumTopicFromIndex(topicId, slug);
+}
+```
+
+### Restore Deleted Content
+
+```typescript src/lib/actions/forum/topics.ts
+export async function restoreForumTopic(data) {
+  await prismaWeb2Client.forumTopic.update({
+    where: { id: topicId },
+    data: {
+      deletedAt: null,
+      deletedBy: null,
+    },
+  });
+
+  // Re-index for search
+  await indexForumTopic({
+    topicId,
+    daoSlug: slug,
+    title: restoredTopic.title,
+    content: firstPost?.content || '',
+    author: restoredTopic.address,
+    categoryId: restoredTopic.categoryId,
+    createdAt: restoredTopic.createdAt,
+  });
+}
+```
+
+## Archive Topics
+
+Archiving removes topics from active view but preserves them:
+
+```typescript
+import { archiveForumTopic } from '@/lib/actions/forum/topics';
+
+const result = await archiveForumTopic({
+  topicId,
+  address,
+  signature,
+  message,
+  isAuthor: true, // Set to false for admin archives
+});
+```
+
+## Data Structure
+
+<Tabs>
+  <Tab title="Topic Object">
+    ```typescript
+    interface ForumTopic {
+      id: number;
+      title: string;
+      address: string;
+      categoryId: number | null;
+      postsCount: number;
+      createdAt: string;
+      updatedAt: string;
+      archived: boolean;
+      deletedAt: string | null;
+      deletedBy: string | null;
+      isNsfw: boolean;
+      posts: ForumPost[];
+      category?: {
+        id: number;
+        name: string;
+        adminOnlyTopics: boolean;
+        isDuna: boolean;
+      };
+      topicReactionsByEmoji?: Record<string, string[]>;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Post Object">
+    ```typescript
+    interface ForumPost {
+      id: number;
+      topicId: number;
+      address: string;
+      parentPostId: number | null;
+      content: string;
+      createdAt: string;
+      deletedAt: string | null;
+      deletedBy: string | null;
+      isNsfw: boolean;
+      reactionsByEmoji?: Record<string, string[]>;
+      attachments?: ForumAttachment[];
+      votes?: ForumPostVote[];
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always verify signatures">
+    Every write operation requires wallet signature verification to prevent unauthorized actions.
+  </Accordion>
+  
+  <Accordion title="Check voting power">
+    Verify users have sufficient voting power before allowing topic creation or posting.
+  </Accordion>
+  
+  <Accordion title="Moderate content automatically">
+    Run content through moderation before saving to maintain community standards.
+  </Accordion>
+  
+  <Accordion title="Index asynchronously">
+    Don't block user responses waiting for search indexing - run it asynchronously.
+  </Accordion>
+  
+  <Accordion title="Handle NSFW gracefully">
+    Filter NSFW content from public queries but preserve it for admin review.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Reactions" icon="face-smile" href="/forum/reactions">
+    Add emoji reactions and engagement features
+  </Card>
+  <Card title="Attachments" icon="paperclip" href="/forum/attachments">
+    Enable file uploads and IPFS storage
+  </Card>
+  <Card title="Moderation" icon="gavel" href="/forum/moderation">
+    Set up admin controls and content moderation
+  </Card>
+  <Card title="Search" icon="magnifying-glass" href="/forum/search">
+    Implement full-text search functionality
+  </Card>
+</CardGroup>

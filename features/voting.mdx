@@ -1,0 +1,477 @@
+---
+title: Voting
+description: Cast votes on proposals and participate in DAO governance decisions
+---
+
+The voting system is the core mechanism for DAO decision-making, allowing token holders and delegates to voice their opinions on proposals.
+
+## Overview
+
+Voting in Agora enables:
+
+- **Cast votes** on active proposals with your voting power
+- **Multiple voting types** - standard, approval, optimistic, and ranked choice
+- **Real-time results** - Track voting progress and outcomes
+- **Vote reasoning** - Explain your decisions to the community
+- **Voting history** - Review past votes and participation
+
+## Voting Power
+
+Your voting power is determined at the proposal's snapshot block:
+
+<CardGroup cols={3}>
+  <Card title="Direct Tokens" icon="wallet">
+    Tokens you hold in your wallet
+  </Card>
+  
+  <Card title="Delegated Power" icon="users">
+    Tokens delegated to you by others
+  </Card>
+  
+  <Card title="Advanced Delegations" icon="diagram-project">
+    Partial or conditional delegations
+  </Card>
+</CardGroup>
+
+<Note>
+  Voting power is snapshot when the proposal is created. Token transfers or new delegations after the snapshot won't affect that proposal.
+</Note>
+
+## Voting Methods
+
+### Standard Voting
+
+The most common voting type with three options:
+
+<Tabs>
+  <Tab title="For">
+    Support the proposal - you want it to pass and be executed
+  </Tab>
+  
+  <Tab title="Against">
+    Oppose the proposal - you don't want it to pass
+  </Tab>
+  
+  <Tab title="Abstain">
+    Participate in quorum without supporting or opposing
+  </Tab>
+</Tabs>
+
+<Steps>
+  <Step title="Navigate to Proposal">
+    Open the active proposal you want to vote on
+  </Step>
+  
+  <Step title="Select Vote Choice">
+    Click For, Against, or Abstain
+  </Step>
+  
+  <Step title="Add Reason (Optional)">
+    Explain your vote to help others understand your perspective
+  </Step>
+  
+  <Step title="Sign Transaction">
+    Confirm the vote in your connected wallet
+  </Step>
+  
+  <Step title="Vote Recorded">
+    Your vote appears in the votes list immediately
+  </Step>
+</Steps>
+
+<CodeGroup>
+```typescript Casting a Standard Vote
+// Vote data structure
+type VoteParams = {
+  proposalId: string;
+  support: 0 | 1 | 2; // 0=Against, 1=For, 2=Abstain
+  reason?: string;
+  params?: string; // For advanced voting types
+};
+
+// The vote is recorded with your full voting power
+const vote = {
+  proposalId: "12345",
+  support: 1, // For
+  reason: "This proposal aligns with our long-term goals",
+  weight: "10000000000000000000000" // Your voting power in wei
+};
+```
+</CodeGroup>
+
+### Approval Voting
+
+Vote for multiple options simultaneously:
+
+<Note>
+  In approval voting, you can select multiple options. Each selected option receives your full voting power.
+</Note>
+
+**How it works:**
+
+1. View all available options in the proposal
+2. Select all options you approve of (you can pick multiple)
+3. Each selected option gets your full voting weight
+4. Options with the most approvals win (based on proposal criteria)
+
+**Use cases:**
+- Selecting multiple grant recipients
+- Choosing team members
+- Approving multiple initiatives
+
+<CodeGroup>
+```typescript src/app/api/common/votes/getVotes.ts
+type ApprovalVote = {
+  proposalId: string;
+  support: string; // "1" for approval votes
+  params: string; // Array of selected option indices: "[0,2,4]"
+  weight: bigint;
+  reason?: string;
+};
+
+// Example: Approving options 0, 2, and 4
+const approvalVote = {
+  proposalId: "12345",
+  support: "1",
+  params: "[0,2,4]", // Selected option indices
+  weight: 10000n,
+  reason: "These three options align with our goals"
+};
+```
+</CodeGroup>
+
+### Optimistic Voting
+
+Reverse voting where proposals pass unless actively vetoed:
+
+- Proposals are **approved by default**
+- Voters can **veto** if they oppose
+- Used for routine operations and trusted proposers
+- Lower voter turnout required
+
+<Warning>
+  Optimistic proposals pass unless enough voters actively veto them. Make sure to vote if you oppose!
+</Warning>
+
+### Snapshot Voting
+
+Off-chain voting through Snapshot integration:
+
+- **Gasless voting** - No transaction fees
+- **Flexible options** - Support various voting types
+- **Signaling votes** - Test community sentiment
+- **Results stored** - Tracked alongside on-chain votes
+
+## Casting Your Vote
+
+### Prerequisites
+
+<AccordionGroup>
+  <Accordion title="Connected Wallet">
+    Your wallet must be connected to the platform. Supported wallets include MetaMask, WalletConnect, Coinbase Wallet, and others.
+  </Accordion>
+  
+  <Accordion title="Voting Power">
+    You must have voting power at the proposal's snapshot block. This includes tokens you hold or tokens delegated to you.
+  </Accordion>
+  
+  <Accordion title="Active Proposal">
+    The proposal must be in the "Active" state. You cannot vote on pending, expired, or executed proposals.
+  </Accordion>
+  
+  <Accordion title="No Prior Vote">
+    You can only vote once per proposal (unless using advanced features like vote changing).
+  </Accordion>
+</AccordionGroup>
+
+### Vote Reasoning
+
+Providing context for your vote helps the community:
+
+<CardGroup cols={2}>
+  <Card title="Why It Matters" icon="lightbulb">
+    - Informs other voters
+    - Builds delegate reputation
+    - Creates governance record
+    - Facilitates discussion
+  </Card>
+  
+  <Card title="What to Include" icon="list-check">
+    - Key decision factors
+    - Concerns or risks
+    - Alternative suggestions
+    - Supporting evidence
+  </Card>
+</CardGroup>
+
+**Example reasons:**
+
+- "Supporting this grant proposal because the team has delivered consistently in the past."
+- "Voting against due to insufficient technical specification and budget concerns."
+- "Abstaining as I have a conflict of interest with one of the grant recipients."
+
+## Viewing Votes
+
+### On Proposal Pages
+
+Each proposal displays:
+
+- **Vote totals** - For, Against, Abstain counts
+- **Progress bars** - Visual representation of voting
+- **Quorum status** - Progress toward minimum participation
+- **Individual votes** - List of all voters with their choices
+
+### Votes List
+
+The votes section shows:
+
+<Tabs>
+  <Tab title="By Weight">
+    Sort by voting power (default) - largest votes first
+  </Tab>
+  
+  <Tab title="By Time">
+    Sort by timestamp - most recent votes first
+  </Tab>
+  
+  <Tab title="By Voter">
+    Filter to specific addresses or delegates
+  </Tab>
+</Tabs>
+
+<CodeGroup>
+```typescript Fetching Votes for a Proposal
+import { fetchVotesForProposal } from '@/app/api/common/votes/getVotes';
+
+const result = await fetchVotesForProposal({
+  proposalId: "12345",
+  pagination: { limit: 20, offset: 0 },
+  sort: "weight" // or "block_number"
+});
+
+console.log(result.data); // Array of votes
+console.log(result.meta); // Pagination info
+```
+</CodeGroup>
+
+## Vote History
+
+### Your Voting Record
+
+Track your participation:
+
+1. Navigate to your profile or delegate page
+2. Select the "Votes" tab
+3. View all proposals you've voted on
+4. See your voting choices and reasoning
+
+### Delegate Voting History
+
+Review how your delegate votes:
+
+- Visit their profile at `/delegates/[address]`
+- Check the "Votes" tab for complete history
+- See voting patterns and participation rate
+- Read their vote reasoning
+
+<CodeGroup>
+```typescript Fetching Delegate Voting History
+import { fetchVotesForDelegate } from '@/app/api/common/votes/getVotes';
+
+const result = await fetchVotesForDelegate({
+  addressOrENSName: 'delegate.eth',
+  pagination: { limit: 20, offset: 0 }
+});
+
+const votes = result.data;
+console.log(`Participation: ${votes.length} proposals voted on`);
+```
+</CodeGroup>
+
+## Vote Data Structure
+
+Understanding vote data:
+
+<CodeGroup>
+```typescript src/app/api/common/votes/vote.d.ts
+type Vote = {
+  transactionHash: string | null;
+  address: string; // Voter address
+  proposalId: string;
+  support: Support; // Vote choice
+  weight: string; // Voting power used
+  reason: string | null; // Optional explanation
+  params: ParsedParams; // For approval/ranked voting
+  proposalValue: bigint;
+  proposalTitle: string;
+  proposalType: ProposalType;
+  timestamp: Date | null;
+  blockNumber?: bigint;
+};
+
+type Support = "FOR" | "AGAINST" | "ABSTAIN";
+```
+</CodeGroup>
+
+## Voting Analytics
+
+### Participation Metrics
+
+Track governance health:
+
+- **Participation rate** - Percentage of voting power that votes
+- **Quorum achievement** - How often quorum is reached
+- **Vote distribution** - Balance between For/Against/Abstain
+- **Voter concentration** - Power distribution among voters
+
+### Delegate Performance
+
+Evaluate delegate effectiveness:
+
+- **Voting frequency** - Proposals voted on vs. total active
+- **Vote timing** - Early vs. late voting patterns
+- **Reasoning quality** - Depth of vote explanations
+- **Alignment** - Consistency with stated positions
+
+## Advanced Features
+
+### Hybrid Voting
+
+Some proposals combine on-chain and off-chain voting:
+
+<Steps>
+  <Step title="Off-chain Signal">
+    Community votes on Snapshot for initial feedback
+  </Step>
+  
+  <Step title="On-chain Vote">
+    Formal vote with on-chain execution rights
+  </Step>
+  
+  <Step title="Combined Results">
+    Both vote results displayed together
+  </Step>
+</Steps>
+
+### Citizen Voting
+
+For Optimism Collective:
+
+- Citizens can vote on certain proposals
+- Separate from token holder voting
+- One-citizen-one-vote principle
+- Displayed alongside token votes
+
+### Vote Delegation Within Proposals
+
+Some systems allow:
+
+- Delegating vote on specific proposal only
+- Temporary delegation for single vote
+- Reverts to normal delegation afterward
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Vote Consistently">
+    - Review all active proposals
+    - Vote before deadline
+    - Maintain regular participation
+    - Don't skip votes without reason
+  </Accordion>
+  
+  <Accordion title="Provide Reasoning">
+    - Explain your decision
+    - Reference specific concerns
+    - Suggest improvements
+    - Be constructive in criticism
+  </Accordion>
+  
+  <Accordion title="Stay Informed">
+    - Read full proposal text
+    - Review discussion threads
+    - Check implementation details
+    - Verify transaction data
+  </Accordion>
+  
+  <Accordion title="Engage Thoughtfully">
+    - Vote based on merit, not popularity
+    - Consider long-term implications
+    - Balance different stakeholder interests
+    - Update views based on new information
+  </Accordion>
+</AccordionGroup>
+
+## API Reference
+
+### Fetching Votes
+
+```typescript
+// Get votes for a proposal
+const proposalVotes = await fetchVotesForProposal({
+  proposalId: "12345",
+  pagination: { limit: 50, offset: 0 },
+  sort: "weight"
+});
+
+// Get votes by a delegate
+const delegateVotes = await fetchVotesForDelegate({
+  addressOrENSName: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+  pagination: { limit: 20, offset: 0 }
+});
+
+// Get user's vote on specific proposal
+const userVote = await fetchUserVotesForProposal({
+  proposalId: "12345",
+  address: "0x..."
+});
+```
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Proposals" href="/features/proposals" icon="file-lines">
+    Learn about creating and managing proposals
+  </Card>
+  
+  <Card title="Delegation" href="/features/delegation" icon="users">
+    Understand voting power and delegation
+  </Card>
+  
+  <Card title="Forums" href="/features/forums" icon="comments">
+    Discuss votes and proposals with the community
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Cannot cast vote">
+    - Check proposal is in Active state
+    - Verify you have voting power at snapshot
+    - Ensure wallet is connected
+    - Confirm you haven't already voted
+    - Check for sufficient gas fees
+  </Accordion>
+  
+  <Accordion title="Vote not appearing">
+    - Wait for transaction confirmation (1-2 blocks)
+    - Refresh the proposal page
+    - Verify transaction on block explorer
+    - Check correct network is selected
+  </Accordion>
+  
+  <Accordion title="Wrong voting power shown">
+    - Voting power is from snapshot block
+    - Recent token changes don't apply
+    - Check delegation status at snapshot
+    - Verify token balance at that time
+  </Accordion>
+  
+  <Accordion title="Cannot change vote">
+    - Most voting systems don't allow changes
+    - Vote carefully before submitting
+    - Contact governance team if critical error
+    - Learn from experience for future votes
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,490 @@
+---
+title: 'DUNA Integration'
+description: 'Specialized forum features for DUNA quarterly reports and document management'
+---
+
+## Overview
+
+The forum system includes specialized integration for DUNA (Decentralized Unincorporated Nonprofit Association) with dedicated components for quarterly reports and document management.
+
+<Info>
+  DUNA is a legal framework for DAOs to operate as unincorporated nonprofit associations. The forum provides specialized tools for DUNA compliance and reporting.
+</Info>
+
+## DUNA Category
+
+### Category Configuration
+
+DUNA categories are marked with a special flag:
+
+```typescript
+interface ForumCategory {
+  id: number;
+  name: string;
+  description?: string;
+  isDuna: boolean;          // Marks category as DUNA-specific
+  adminOnlyTopics: boolean; // Only admins can create topics
+  archived: boolean;
+}
+```
+
+### Get DUNA Category
+
+```typescript src/lib/actions/forum/categories.ts
+export async function getDunaCategoryId() {
+  const category = await prismaWeb2Client.forumCategory.findFirst({
+    where: {
+      dao_slug: slug,
+      isDuna: true,
+    },
+    select: { id: true },
+  });
+
+  return category?.id;
+}
+```
+
+## Quarterly Reports
+
+Quarterly reports are forum topics in the DUNA category with specialized handling.
+
+### Create Quarterly Report
+
+Reports are created as regular topics but in the DUNA category:
+
+```typescript
+import { useForum } from '@/hooks/useForum';
+
+function CreateQuarterlyReport() {
+  const { createTopic } = useForum();
+  const dunaCategoryId = await getDunaCategoryId();
+  
+  const handleCreateReport = async () => {
+    const result = await createTopic(
+      'Q1 2024 Quarterly Report',
+      reportContent,
+      dunaCategoryId // DUNA category ID
+    );
+    
+    if (result?.success) {
+      console.log('Quarterly report created');
+    }
+  };
+}
+```
+
+### Report Structure
+
+Quarterly reports follow a standard structure:
+
+```markdown
+# Q1 2024 Quarterly Report
+
+## Financial Summary
+- Revenue: $XXX,XXX
+- Expenses: $XX,XXX
+- Treasury Balance: $XXX,XXX
+
+## Activities
+- Governance proposals: X
+- Community events: X
+- Development milestones: X
+
+## Compliance
+- Tax status: Current
+- Legal filings: Up to date
+- Audit: Completed
+
+## Attachments
+- Financial Statement (PDF)
+- Audit Report (PDF)
+- Activity Log (CSV)
+```
+
+### Comment on Reports
+
+Community members can comment on quarterly reports:
+
+```typescript
+import { useForum } from '@/hooks/useForum';
+
+function ReportComments({ reportTopicId }) {
+  const { createPost } = useForum();
+  
+  const handleComment = async (content: string) => {
+    const result = await createPost(
+      reportTopicId,
+      content,
+      null // No parent (top-level comment)
+    );
+    
+    return result;
+  };
+}
+```
+
+## Document Management
+
+### Upload DUNA Documents
+
+DUNA documents are attached to the DUNA category:
+
+```typescript src/lib/actions/forum/attachments.ts
+export async function uploadDocumentFromBase64(
+  base64Data: string,
+  fileName: string,
+  contentType: string,
+  address: string,
+  signature: string,
+  message: string,
+  categoryId: number // DUNA category ID
+) {
+  // Verify signature
+  const isValid = await verifyMessage({
+    address: address as `0x${string}`,
+    message,
+    signature: signature as `0x${string}`,
+  });
+
+  if (!isValid) {
+    return { success: false, error: 'Invalid signature' };
+  }
+
+  // Convert and upload to IPFS
+  const buffer = Buffer.from(base64Data.split(',')[1], 'base64');
+  const result = await uploadFileToPinata(buffer, {
+    name: fileName,
+    keyvalues: {
+      type: 'forum-document',
+      originalName: fileName,
+      contentType,
+      uploadedAt: Date.now(),
+    },
+  });
+
+  // Store in database
+  const document = await prismaWeb2Client.forumCategoryAttachment.create({
+    data: {
+      fileName,
+      fileSize: buffer.length,
+      contentType,
+      ipfsCid: result.IpfsHash,
+      address,
+      dao_slug: slug,
+      categoryId,
+      isFinancialStatement: contentType === 'application/pdf',
+    },
+  });
+
+  return {
+    success: true,
+    data: {
+      id: document.id,
+      name: document.fileName,
+      url: getIPFSUrl(document.ipfsCid),
+      ipfsCid: document.ipfsCid,
+      createdAt: document.createdAt.toISOString(),
+      uploadedBy: address,
+      isFinancialStatement: document.isFinancialStatement,
+    },
+  };
+}
+```
+
+### Get DUNA Documents
+
+```typescript src/lib/actions/forum/attachments.ts
+export const getForumCategoryAttachments = async ({
+  categoryId,
+  archived = false,
+}: {
+  categoryId: number;
+  archived?: boolean;
+}) => {
+  const now = new Date();
+
+  const attachments = await prismaWeb2Client.forumCategoryAttachment.findMany({
+    where: {
+      dao_slug: slug,
+      categoryId,
+      ...(archived
+        ? {
+            OR: [{ archived: true }, { expirationTime: { lte: now } }],
+          }
+        : {
+            archived: false,
+            OR: [
+              { revealTime: null, expirationTime: null },
+              {
+                AND: [
+                  { OR: [{ revealTime: null }, { revealTime: { lte: now } }] },
+                  { OR: [{ expirationTime: null }, { expirationTime: { gt: now } }] },
+                ],
+              },
+            ],
+          }),
+    },
+  });
+
+  return {
+    success: true,
+    data: attachments.map((attachment) => ({
+      id: attachment.id,
+      name: attachment.fileName,
+      url: getIPFSUrl(attachment.ipfsCid),
+      ipfsCid: attachment.ipfsCid,
+      createdAt: attachment.createdAt.toISOString(),
+      uploadedBy: attachment.address,
+      archived: attachment.archived,
+      isFinancialStatement: attachment.isFinancialStatement ?? false,
+      revealTime: attachment.revealTime?.toISOString() ?? null,
+      expirationTime: attachment.expirationTime?.toISOString() ?? null,
+    })),
+  };
+};
+```
+
+### Financial Statements
+
+Financial statements are marked with a special flag:
+
+```typescript
+interface ForumCategoryAttachment {
+  id: number;
+  fileName: string;
+  ipfsCid: string;
+  isFinancialStatement: boolean; // Marks document as financial statement
+  revealTime: Date | null;       // Scheduled release date
+  expirationTime: Date | null;   // Document expiration
+}
+```
+
+## Timed Document Releases
+
+DUNA documents support scheduled releases:
+
+```typescript
+// Example: Q1 financial statement released on April 1st
+const attachment = await prismaWeb2Client.forumCategoryAttachment.create({
+  data: {
+    fileName: 'Q1-2024-Financial-Statement.pdf',
+    ipfsCid: 'QmXxx...',
+    categoryId: dunaCategoryId,
+    isFinancialStatement: true,
+    revealTime: new Date('2024-04-01T00:00:00Z'),
+    expirationTime: null, // Never expires
+  },
+});
+```
+
+### Query Logic for Timed Documents
+
+```typescript
+const now = new Date();
+
+// Get visible documents
+const visibleDocuments = await prismaWeb2Client.forumCategoryAttachment.findMany({
+  where: {
+    categoryId: dunaCategoryId,
+    archived: false,
+    OR: [
+      // Not time-restricted
+      { revealTime: null, expirationTime: null },
+      // Time-restricted but currently visible
+      {
+        AND: [
+          { OR: [{ revealTime: null }, { revealTime: { lte: now } }] },
+          { OR: [{ expirationTime: null }, { expirationTime: { gt: now } }] },
+        ],
+      },
+    ],
+  },
+});
+```
+
+## DUNA Administration
+
+### Admin-Only Topics
+
+DUNA categories typically restrict topic creation to admins:
+
+```typescript
+const dunaCategory = await prismaWeb2Client.forumCategory.create({
+  data: {
+    name: 'DUNA Reports',
+    description: 'Quarterly reports and official documents',
+    dao_slug: slug,
+    isDuna: true,
+    adminOnlyTopics: true, // Only admins can create topics
+  },
+});
+```
+
+### Permission Checks
+
+```typescript src/lib/actions/forum/topics.ts
+export async function createForumTopic(data) {
+  // Get category info
+  const category = await prismaWeb2Client.forumCategory.findUnique({
+    where: { id: validatedData.categoryId },
+    select: { adminOnlyTopics: true, isDuna: true },
+  });
+
+  // Check if admin-only category
+  if (category?.adminOnlyTopics) {
+    const hasPermission = await checkPermission(
+      validatedData.address,
+      slug as DaoSlug,
+      'forums',
+      'topics',
+      'create'
+    );
+
+    if (!hasPermission) {
+      return {
+        success: false,
+        error: 'Only admins can create topics in this category',
+      };
+    }
+  }
+
+  // Continue with topic creation...
+}
+```
+
+## UI Components
+
+While the source code doesn't include DUNA-specific UI components in the provided files, the system supports these component types:
+
+### Report Card
+
+```typescript
+interface QuarterlyReportCardProps {
+  topic: ForumTopic;
+  category: ForumCategory;
+  onView: () => void;
+}
+
+function QuarterlyReportCard({ topic, category, onView }: QuarterlyReportCardProps) {
+  return (
+    <div className="report-card">
+      <h3>{topic.title}</h3>
+      <p>Posted: {new Date(topic.createdAt).toLocaleDateString()}</p>
+      <p>Comments: {topic.postsCount - 1}</p>
+      
+      {category.isDuna && <Badge>DUNA Report</Badge>}
+      
+      <Button onClick={onView}>View Report</Button>
+    </div>
+  );
+}
+```
+
+### Document Upload
+
+```typescript
+function DocumentUploadModal({ categoryId, onSuccess }) {
+  const { uploadDocument } = useForum();
+  const [uploading, setUploading] = useState(false);
+  
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    
+    // Convert to base64
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    
+    reader.onload = async () => {
+      const base64Data = reader.result as string;
+      
+      const result = await uploadDocument(
+        base64Data,
+        file.name,
+        file.type,
+        categoryId
+      );
+      
+      if (result?.success) {
+        onSuccess(result.data);
+      }
+      
+      setUploading(false);
+    };
+  };
+  
+  return (
+    <Modal>
+      <FileUploader
+        onUpload={handleUpload}
+        disabled={uploading}
+        accept=".pdf,.doc,.docx"
+      />
+    </Modal>
+  );
+}
+```
+
+## Data Structure
+
+```typescript
+interface DUNAReport {
+  topic: ForumTopic;
+  category: ForumCategory;
+  documents: ForumCategoryAttachment[];
+  comments: ForumPost[];
+  metadata: {
+    quarter: string;
+    year: number;
+    publishedDate: string;
+    financialStatements: ForumCategoryAttachment[];
+    auditReports: ForumCategoryAttachment[];
+  };
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Restrict topic creation">
+    Set `adminOnlyTopics: true` on DUNA categories to ensure only authorized users can post official reports.
+  </Accordion>
+  
+  <Accordion title="Mark financial documents">
+    Use the `isFinancialStatement` flag for proper categorization and compliance tracking.
+  </Accordion>
+  
+  <Accordion title="Schedule releases">
+    Use `revealTime` for scheduled quarterly releases to maintain consistent reporting schedules.
+  </Accordion>
+  
+  <Accordion title="Preserve documents">
+    Never hard delete DUNA documents - use archiving instead to maintain compliance records.
+  </Accordion>
+  
+  <Accordion title="Enable comments">
+    Allow community comments on reports for transparency and engagement.
+  </Accordion>
+</AccordionGroup>
+
+## Compliance Considerations
+
+<Warning>
+  DUNA compliance requires proper documentation and timely reporting. Ensure:
+  
+  - Quarterly reports are published on schedule
+  - Financial statements are accurate and complete
+  - All documents are permanently stored on IPFS
+  - Community has opportunity to review and comment
+  - Admin actions are logged for audit trail
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Attachments" icon="paperclip" href="/forum/attachments">
+    Learn more about IPFS file storage
+  </Card>
+  <Card title="Moderation" icon="gavel" href="/forum/moderation">
+    Set up admin controls and permissions
+  </Card>
+</CardGroup>

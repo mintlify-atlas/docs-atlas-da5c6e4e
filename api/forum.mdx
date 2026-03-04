@@ -1,0 +1,419 @@
+---
+title: Forum API
+description: Track forum topic views and synchronize view counts from Redis to PostgreSQL
+---
+
+The Forum API provides functionality for tracking and managing forum topic view statistics.
+
+## Sync Forum Views
+
+<CodeGroup>
+```bash POST /api/v1/forum/sync-views
+curl -X POST \
+  -H "Authorization: Bearer YOUR_CRON_SECRET" \
+  "https://vote.ens.domains/api/v1/forum/sync-views"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://vote.ens.domains/api/v1/forum/sync-views',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_CRON_SECRET'
+    }
+  }
+);
+const result = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://vote.ens.domains/api/v1/forum/sync-views',
+    headers={'Authorization': 'Bearer YOUR_CRON_SECRET'}
+)
+result = response.json()
+```
+</CodeGroup>
+
+**Location in code:** `src/app/api/v1/forum/sync-views/route.ts:8`
+
+### Authentication
+
+This endpoint requires a cron secret for authentication:
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the CRON_SECRET value: `Bearer YOUR_CRON_SECRET`
+</ParamField>
+
+### Purpose
+
+This endpoint synchronizes forum topic view counts from Redis (temporary overlay) to PostgreSQL (persistent storage). It's designed to be called periodically by a cron job.
+
+### Process Flow
+
+1. **Fetch Redis Overlays**: Retrieves all targets with overlay counters from Redis
+2. **Upsert to PostgreSQL**: Updates or creates view records in the database
+3. **Reset Counters**: Clears the Redis overlay counters after successful sync
+4. **Error Handling**: Tracks and reports any sync failures
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the sync operation completed successfully
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable summary of the operation
+</ResponseField>
+
+<ResponseField name="summary" type="object">
+  Sync operation statistics
+  <Expandable title="properties">
+    <ResponseField name="total" type="number">
+      Total number of targets processed
+    </ResponseField>
+    <ResponseField name="flushed" type="number">
+      Number of targets successfully flushed
+    </ResponseField>
+    <ResponseField name="failed" type="number">
+      Number of targets that failed to flush
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="errors" type="array" optional>
+  Array of error objects (only present if there were failures)
+  <Expandable title="properties">
+    <ResponseField name="target" type="string">
+      Target identifier that failed (format: `targetType:targetId`)
+    </ResponseField>
+    <ResponseField name="error" type="string">
+      Error message
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Success Response
+
+```json
+{
+  "success": true,
+  "message": "Successfully flushed 145/145 Redis overlays",
+  "summary": {
+    "total": 145,
+    "flushed": 145,
+    "failed": 0
+  }
+}
+```
+
+### Example Partial Failure Response
+
+```json
+{
+  "success": true,
+  "message": "Successfully flushed 143/145 Redis overlays",
+  "summary": {
+    "total": 145,
+    "flushed": 143,
+    "failed": 2
+  },
+  "errors": [
+    {
+      "target": "forum_topic:12345",
+      "error": "Database connection timeout"
+    },
+    {
+      "target": "forum_topic:67890",
+      "error": "Invalid topic ID"
+    }
+  ]
+}
+```
+
+### Example No Data Response
+
+```json
+{
+  "success": true,
+  "message": "No Redis overlays to flush",
+  "flushed": 0
+}
+```
+
+## Implementation Details
+
+**Location in code:** `src/app/api/v1/forum/sync-views/route.ts:8`
+
+### Redis View Tracker
+
+The system uses Redis to temporarily track view counts before persisting to PostgreSQL:
+
+```typescript
+// Get all targets with overlay counts from Redis
+const redisTargets = await ViewTracker.getAllTargetsWithOverlay();
+
+// Example redisTarget structure:
+{
+  targetType: "forum_topic",
+  targetId: "12345",
+  overlayCount: 47  // Number of views since last sync
+}
+```
+
+### Database Upsert
+
+```typescript
+// Upsert view statistics to PostgreSQL
+await prismaWeb2Client.forumTopicViewStats.upsert({
+  where: {
+    dao_slug_topicId: {
+      dao_slug: slug,
+      topicId: redisTarget.targetId,
+    },
+  },
+  update: {
+    views: { increment: redisTarget.overlayCount },
+    lastUpdated: new Date(),
+  },
+  create: {
+    dao_slug: slug,
+    topicId: redisTarget.targetId,
+    views: redisTarget.overlayCount,
+    lastUpdated: new Date(),
+  },
+});
+```
+
+### Counter Reset
+
+```typescript
+// Reset Redis counters after successful flush
+await ViewTracker.resetCounters(
+  redisTarget.targetType,
+  redisTarget.targetId
+);
+```
+
+## Database Schema
+
+### forumTopicViewStats Table
+
+```sql
+CREATE TABLE forum_topic_view_stats (
+  dao_slug VARCHAR(50) NOT NULL,
+  topicId VARCHAR(100) NOT NULL,
+  views INTEGER NOT NULL DEFAULT 0,
+  lastUpdated TIMESTAMP NOT NULL,
+  PRIMARY KEY (dao_slug, topicId)
+);
+```
+
+## Cron Job Setup
+
+This endpoint is designed to be called by a cron job at regular intervals.
+
+### Recommended Schedule
+
+Run every 5-15 minutes to balance between:
+- **Data freshness**: More frequent = more up-to-date view counts
+- **System load**: Less frequent = lower database load
+
+### Vercel Cron Configuration
+
+```json
+{
+  "crons": [
+    {
+      "path": "/api/v1/forum/sync-views",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
+```
+
+### Environment Variable
+
+```bash
+CRON_SECRET=your-secure-random-string-here
+```
+
+**Security Note**: Keep this secret secure and never expose it in client-side code.
+
+## Error Handling
+
+### Unauthorized Access
+
+```json
+{
+  "error": "Unauthorized",
+  "status": 401
+}
+```
+
+Returned when:
+- No `Authorization` header provided
+- Invalid or incorrect CRON_SECRET
+
+### Fatal Error
+
+```json
+{
+  "success": false,
+  "error": "Database connection failed",
+  "timestamp": "2024-01-15T14:23:45.123Z",
+  "status": 500
+}
+```
+
+Returned when:
+- Database connection fails
+- Redis connection fails
+- Unrecoverable system error
+
+## Monitoring and Logging
+
+### Console Logging
+
+The endpoint logs progress and errors to the console:
+
+```javascript
+console.log("Starting Redis -> Postgres view sync...");
+console.log(`Flushing ${redisTargets.length} Redis overlays to Postgres`);
+console.log(`Flushed ${flushedCount}/${redisTargets.length} targets...`);
+console.log("Redis -> Postgres flush completed:", {
+  flushed: flushedCount,
+  errors: flushErrors.length,
+});
+```
+
+### Batch Progress Logging
+
+Every 100 flushes, progress is logged:
+
+```typescript
+if (flushedCount % 100 === 0) {
+  console.log(
+    `Flushed ${flushedCount}/${redisTargets.length} targets...`
+  );
+}
+```
+
+## Redis View Tracker API
+
+### Get All Targets with Overlay
+
+```typescript
+const targets = await ViewTracker.getAllTargetsWithOverlay();
+// Returns: Array<{ targetType: string, targetId: string, overlayCount: number }>
+```
+
+### Reset Counters
+
+```typescript
+await ViewTracker.resetCounters(targetType, targetId);
+// Clears the overlay counter for the specified target
+```
+
+## Use Cases
+
+### Scheduled Sync Job
+
+Run this endpoint periodically to keep view counts synchronized:
+
+```bash
+# Called by cron every 10 minutes
+0,10,20,30,40,50 * * * * curl -X POST \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  https://vote.ens.domains/api/v1/forum/sync-views
+```
+
+### Manual Flush
+
+Manually trigger a flush when needed:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_CRON_SECRET" \
+  https://vote.ens.domains/api/v1/forum/sync-views
+```
+
+### Monitoring Script
+
+Monitor sync job health:
+
+```javascript
+const response = await fetch(
+  'https://vote.ens.domains/api/v1/forum/sync-views',
+  {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET}` }
+  }
+);
+
+const result = await response.json();
+
+if (!result.success || result.summary.failed > 0) {
+  // Alert: Sync job has issues
+  notifyOps(result);
+}
+```
+
+## Best Practices
+
+1. **Secure the CRON_SECRET**: Use a strong, random string
+2. **Monitor failures**: Set up alerts for sync failures
+3. **Adjust frequency**: Balance freshness vs. load based on traffic
+4. **Handle partial failures**: The endpoint continues even if some targets fail
+5. **Database cleanup**: Consider periodic cleanup of old view stats
+
+## Performance Considerations
+
+### Batch Processing
+
+The endpoint processes all targets in a single run but logs progress every 100 items:
+
+```typescript
+for (const redisTarget of redisTargets) {
+  // Process each target
+  if (flushedCount % 100 === 0) {
+    console.log(`Progress: ${flushedCount}/${redisTargets.length}`);
+  }
+}
+```
+
+### Database Connection Management
+
+```typescript
+try {
+  // Perform sync operations
+} finally {
+  await prismaWeb2Client.$disconnect();
+}
+```
+
+### Error Isolation
+
+Each target flush is wrapped in a try-catch to prevent one failure from stopping the entire sync:
+
+```typescript
+for (const redisTarget of redisTargets) {
+  try {
+    await flushTarget(redisTarget);
+    flushedCount++;
+  } catch (error) {
+    flushErrors.push({
+      target: `${redisTarget.targetType}:${redisTarget.targetId}`,
+      error: error.message,
+    });
+  }
+}
+```
+
+## Related Documentation
+
+- [Analytics API](/api/analytics) - For analytics event tracking
+- [Authentication](/api/authentication) - For API authentication details

@@ -1,0 +1,619 @@
+---
+title: Analytics API
+description: Track events and retrieve governance analytics including vote counts, delegate weights, and time-series metrics
+---
+
+The Analytics API provides endpoints for tracking user events and retrieving governance analytics data.
+
+## Track Event
+
+<CodeGroup>
+```bash POST /api/analytics/track
+curl -X POST \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_name": "proposal_viewed",
+    "event_data": {
+      "proposal_id": "123",
+      "user_address": "0x1234...5678"
+    }
+  }' \
+  "https://vote.ens.domains/api/analytics/track"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://vote.ens.domains/api/analytics/track',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_API_KEY',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      event_name: 'proposal_viewed',
+      event_data: {
+        proposal_id: '123',
+        user_address: '0x1234567890abcdef1234567890abcdef12345678'
+      }
+    })
+  }
+);
+const result = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://vote.ens.domains/api/analytics/track',
+    json={
+        'event_name': 'proposal_viewed',
+        'event_data': {
+            'proposal_id': '123',
+            'user_address': '0x1234567890abcdef1234567890abcdef12345678'
+        }
+    },
+    headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+result = response.json()
+```
+</CodeGroup>
+
+**Location in code:** `src/app/api/analytics/track/route.ts:3`
+
+### Request Body
+
+<ParamField body="event_name" type="string" required>
+  Name of the event to track (e.g., `proposal_viewed`, `vote_cast`, `delegate_changed`)
+</ParamField>
+
+<ParamField body="event_data" type="object" required>
+  Event-specific data as a JSON object. Structure varies by event type.
+</ParamField>
+
+### Response
+
+<ResponseField name="success" type="boolean">
+  Whether the event was successfully tracked
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "success": true
+}
+```
+
+### Event Types
+
+Common event types you can track:
+
+- `proposal_viewed` - User viewed a proposal
+- `proposal_created` - User created a proposal
+- `vote_cast` - User cast a vote
+- `delegate_changed` - User changed their delegate
+- `statement_updated` - Delegate updated their statement
+- `page_view` - Page view event
+- `wallet_connected` - User connected their wallet
+
+### Example Event Data
+
+#### Proposal Viewed
+
+```json
+{
+  "event_name": "proposal_viewed",
+  "event_data": {
+    "proposal_id": "123",
+    "user_address": "0x1234...5678",
+    "proposal_type": "STANDARD",
+    "timestamp": "2024-01-15T14:23:45Z"
+  }
+}
+```
+
+#### Vote Cast
+
+```json
+{
+  "event_name": "vote_cast",
+  "event_data": {
+    "proposal_id": "123",
+    "voter_address": "0x1234...5678",
+    "support": 1,
+    "voting_power": "5000000000000000000000",
+    "timestamp": "2024-01-15T14:23:45Z"
+  }
+}
+```
+
+#### Delegate Changed
+
+```json
+{
+  "event_name": "delegate_changed",
+  "event_data": {
+    "delegator": "0x1234...5678",
+    "from_delegate": "0xabcd...ef01",
+    "to_delegate": "0x9876...5432",
+    "timestamp": "2024-01-15T14:23:45Z"
+  }
+}
+```
+
+## Get Proposal Vote Counts
+
+<CodeGroup>
+```bash GET /api/analytics/vote
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://vote.ens.domains/api/analytics/vote"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://vote.ens.domains/api/analytics/vote',
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_API_KEY'
+    }
+  }
+);
+const voteCounts = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://vote.ens.domains/api/analytics/vote',
+    headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+vote_counts = response.json()
+```
+</CodeGroup>
+
+**Location in code:** `src/app/api/analytics/vote/route.ts:3`
+
+### Response
+
+Returns aggregated vote count statistics across all proposals.
+
+```json
+{
+  "total_votes": 15234,
+  "total_voters": 3421,
+  "average_votes_per_proposal": 152.34,
+  "proposals_with_votes": 100,
+  "breakdown": {
+    "for_votes": 9821,
+    "against_votes": 4123,
+    "abstain_votes": 1290
+  }
+}
+```
+
+## Get Top Delegate Weights
+
+<CodeGroup>
+```bash GET /api/analytics/top/delegates
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://vote.ens.domains/api/analytics/top/delegates"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://vote.ens.domains/api/analytics/top/delegates',
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_API_KEY'
+    }
+  }
+);
+const topDelegates = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://vote.ens.domains/api/analytics/top/delegates',
+    headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+top_delegates = response.json()
+```
+</CodeGroup>
+
+**Location in code:** `src/app/api/analytics/top/delegates/route.ts:3`
+
+### Response
+
+Returns the top delegates by voting power with their weights.
+
+```json
+[
+  {
+    "address": "0x1234567890abcdef1234567890abcdef12345678",
+    "voting_power": "5000000000000000000000",
+    "percentage_of_supply": 2.5,
+    "rank": 1,
+    "num_of_delegators": 142
+  },
+  {
+    "address": "0x2345678901abcdef2345678901abcdef23456789",
+    "voting_power": "4500000000000000000000",
+    "percentage_of_supply": 2.25,
+    "rank": 2,
+    "num_of_delegators": 128
+  }
+]
+```
+
+## Get Metric Time Series
+
+<CodeGroup>
+```bash GET /api/analytics/metric/{metric_id}/{frequency}
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  "https://vote.ens.domains/api/analytics/metric/voting_power/daily"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://vote.ens.domains/api/analytics/metric/voting_power/daily',
+  {
+    headers: {
+      'Authorization': 'Bearer YOUR_API_KEY'
+    }
+  }
+);
+const timeSeries = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://vote.ens.domains/api/analytics/metric/voting_power/daily',
+    headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+time_series = response.json()
+```
+</CodeGroup>
+
+**Location in code:** `src/app/api/analytics/metric/[metric_id]/[frequency]/route.ts:3`
+
+### Path Parameters
+
+<ParamField path="metric_id" type="string" required>
+  Metric identifier. Available metrics:
+  - `voting_power` - Total voting power over time
+  - `active_delegates` - Number of active delegates
+  - `proposals_created` - Proposals created over time
+  - `votes_cast` - Votes cast over time
+  - `participation_rate` - Voter participation rate
+  - `treasury_balance` - Treasury balance (if available)
+</ParamField>
+
+<ParamField path="frequency" type="string" required>
+  Time frequency for data points:
+  - `hourly` - Hourly data points
+  - `daily` - Daily aggregation
+  - `weekly` - Weekly aggregation
+  - `monthly` - Monthly aggregation
+</ParamField>
+
+### Response
+
+<ResponseField name="metric_id" type="string">
+  The metric identifier
+</ResponseField>
+
+<ResponseField name="frequency" type="string">
+  Time frequency used
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of time series data points
+  <Expandable title="properties">
+    <ResponseField name="timestamp" type="string">
+      ISO timestamp of the data point
+    </ResponseField>
+    <ResponseField name="value" type="number">
+      Metric value at this timestamp
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example Response
+
+```json
+{
+  "metric_id": "voting_power",
+  "frequency": "daily",
+  "data": [
+    {
+      "timestamp": "2024-01-01T00:00:00Z",
+      "value": 195000000000000000000000000
+    },
+    {
+      "timestamp": "2024-01-02T00:00:00Z",
+      "value": 196500000000000000000000000
+    },
+    {
+      "timestamp": "2024-01-03T00:00:00Z",
+      "value": 198000000000000000000000000
+    }
+  ]
+}
+```
+
+## Analytics Database Schema
+
+### analyticsEvent Table
+
+```sql
+CREATE TABLE analytics_event (
+  id SERIAL PRIMARY KEY,
+  event_name VARCHAR(255) NOT NULL,
+  event_data JSONB NOT NULL,
+  dao_slug VARCHAR(50) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_analytics_event_name ON analytics_event(event_name);
+CREATE INDEX idx_analytics_event_dao ON analytics_event(dao_slug);
+CREATE INDEX idx_analytics_event_created ON analytics_event(created_at);
+```
+
+## Event Tracking Implementation
+
+**Location in code:** `src/app/api/analytics/track/route.ts:3`
+
+```typescript
+export async function POST(request: NextRequest) {
+  const { slug } = Tenant.current();
+  const authResponse = await authenticateApiUser(request);
+
+  if (!authResponse.authenticated) {
+    return new Response(authResponse.failReason, { status: 401 });
+  }
+
+  const { event_name, event_data } = await request.json();
+
+  await prismaWeb2Client.analyticsEvent.create({
+    data: {
+      event_name,
+      event_data,
+      dao_slug: slug,
+    },
+  });
+  
+  return NextResponse.json({ success: true });
+}
+```
+
+## Environment Variables
+
+### Enable Analytics Capture
+
+```bash
+NEXT_PUBLIC_ENABLE_BI_METRICS_CAPTURE=true
+```
+
+Enables analytics event tracking throughout the application.
+
+### DataDog Integration
+
+```bash
+DD_API_KEY=your-datadog-api-key
+DD_APP_KEY=your-datadog-app-key
+ENABLE_DD_METRICS=true
+```
+
+Optional: Enables DataDog monitoring integration for analytics.
+
+## Use Cases
+
+### Track User Interactions
+
+```javascript
+// Track when a user views a proposal
+await fetch('/api/analytics/track', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    event_name: 'proposal_viewed',
+    event_data: {
+      proposal_id: proposalId,
+      user_address: userAddress
+    }
+  })
+});
+```
+
+### Monitor Voting Activity
+
+```javascript
+// Get current vote statistics
+const stats = await fetch('/api/analytics/vote', {
+  headers: { 'Authorization': `Bearer ${apiKey}` }
+}).then(r => r.json());
+
+console.log(`Total votes: ${stats.total_votes}`);
+console.log(`Average per proposal: ${stats.average_votes_per_proposal}`);
+```
+
+### Analyze Delegate Distribution
+
+```javascript
+// Get top delegates by voting power
+const topDelegates = await fetch('/api/analytics/top/delegates', {
+  headers: { 'Authorization': `Bearer ${apiKey}` }
+}).then(r => r.json());
+
+const top10VotingPower = topDelegates
+  .slice(0, 10)
+  .reduce((sum, d) => sum + parseFloat(d.voting_power), 0);
+
+console.log(`Top 10 delegates control: ${top10VotingPower}`);
+```
+
+### Track Metrics Over Time
+
+```javascript
+// Get daily voting power trends
+const timeSeries = await fetch(
+  '/api/analytics/metric/voting_power/daily',
+  { headers: { 'Authorization': `Bearer ${apiKey}` } }
+).then(r => r.json());
+
+// Calculate growth
+const first = timeSeries.data[0].value;
+const last = timeSeries.data[timeSeries.data.length - 1].value;
+const growth = ((last - first) / first * 100).toFixed(2);
+
+console.log(`Voting power growth: ${growth}%`);
+```
+
+## Analytics Queries
+
+### Query Events by Name
+
+```sql
+SELECT 
+  event_name,
+  COUNT(*) as count,
+  DATE_TRUNC('day', created_at) as day
+FROM analytics_event
+WHERE dao_slug = 'ens'
+  AND event_name = 'proposal_viewed'
+GROUP BY event_name, day
+ORDER BY day DESC;
+```
+
+### Query Events by User
+
+```sql
+SELECT 
+  event_name,
+  event_data->>'user_address' as user,
+  COUNT(*) as count
+FROM analytics_event
+WHERE dao_slug = 'ens'
+  AND event_data->>'user_address' = '0x1234...5678'
+GROUP BY event_name, user;
+```
+
+### Query Popular Proposals
+
+```sql
+SELECT 
+  event_data->>'proposal_id' as proposal_id,
+  COUNT(*) as views
+FROM analytics_event
+WHERE dao_slug = 'ens'
+  AND event_name = 'proposal_viewed'
+  AND created_at > NOW() - INTERVAL '7 days'
+GROUP BY proposal_id
+ORDER BY views DESC
+LIMIT 10;
+```
+
+## Error Responses
+
+### Missing Event Name
+
+```json
+{
+  "error": "event_name is required",
+  "status": 400
+}
+```
+
+### Invalid Event Data
+
+```json
+{
+  "error": "event_data must be a valid JSON object",
+  "status": 400
+}
+```
+
+### Authentication Required
+
+```json
+{
+  "error": "Missing or invalid bearer token",
+  "status": 401
+}
+```
+
+### Database Error
+
+```json
+{
+  "error": "Internal server error: Database connection failed",
+  "status": 500
+}
+```
+
+## Best Practices
+
+1. **Consistent Event Names**: Use a naming convention like `resource_action` (e.g., `proposal_viewed`, `vote_cast`)
+2. **Include Timestamps**: Always include timestamps in event_data for time-based analysis
+3. **Structured Data**: Keep event_data structured and consistent for easier querying
+4. **Privacy Compliance**: Don't track personally identifiable information without consent
+5. **Rate Limiting**: Be mindful of analytics tracking volume
+6. **Error Handling**: Handle failed tracking gracefully without breaking user experience
+
+## Performance Considerations
+
+### Batch Events
+
+For high-volume tracking, consider batching events:
+
+```javascript
+const events = [
+  { event_name: 'proposal_viewed', event_data: {...} },
+  { event_name: 'delegate_viewed', event_data: {...} },
+];
+
+// Process events in batch
+await Promise.all(
+  events.map(event => 
+    fetch('/api/analytics/track', {
+      method: 'POST',
+      body: JSON.stringify(event)
+    })
+  )
+);
+```
+
+### Async Tracking
+
+Track events asynchronously to avoid blocking user interactions:
+
+```javascript
+// Don't await analytics calls
+fetch('/api/analytics/track', {
+  method: 'POST',
+  body: JSON.stringify(event)
+}).catch(err => console.error('Analytics failed:', err));
+```
+
+### Database Indexing
+
+Ensure proper indexes for common queries:
+
+```sql
+CREATE INDEX idx_event_data_proposal_id 
+ON analytics_event((event_data->>'proposal_id'));
+
+CREATE INDEX idx_event_data_user_address 
+ON analytics_event((event_data->>'user_address'));
+```

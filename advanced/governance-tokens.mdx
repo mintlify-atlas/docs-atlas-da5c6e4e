@@ -1,0 +1,407 @@
+---
+title: "Governance Tokens"
+description: "Token delegation, voting power calculation, and multi-chain token support"
+---
+
+Governance tokens are the foundation of DAO voting in Agora. This guide covers delegation mechanics, voting power calculations, and multi-chain token aggregation.
+
+## Token Standards
+
+Agora supports ERC-20 tokens with votes extension (ERC-20Votes) for delegation and voting power tracking:
+
+```solidity
+interface ITokenContract {
+  function balanceOf(address account) external view returns (uint256);
+  function getVotes(address account) external view returns (uint256);
+  function delegate(address delegatee) external;
+  function delegateBySig(
+    address delegatee,
+    uint256 nonce,
+    uint256 expiry,
+    uint8 v,
+    bytes32 r,
+    bytes32 s
+  ) external;
+}
+```
+
+## Voting Power Calculation
+
+Voting power is determined by the maximum of delegated votes or token balance:
+
+```typescript
+// src/lib/votingPowerUtils.ts:32
+export async function fetchVotingPowerFromContract(
+  client: PublicClient,
+  address: string,
+  config: VotingPowerConfig
+): Promise<bigint> {
+  // Get delegated voting power
+  const votes = await client.readContract({
+    abi: config.contracts.token.abi,
+    address: config.contracts.token.address,
+    functionName: "getVotes",
+    args: [address],
+  });
+
+  // Get token balance
+  const balance = await client.readContract({
+    abi: config.contracts.token.abi,
+    address: config.contracts.token.address,
+    functionName: "balanceOf",
+    args: [address],
+  });
+
+  // Return maximum of votes and balance
+  return votes > balance ? votes : balance;
+}
+```
+
+<Note>
+  Voting power uses the maximum of `getVotes()` and `balanceOf()` to handle both delegated and self-delegated scenarios.
+</Note>
+
+## Delegation Models
+
+Agora supports three delegation models, configured per tenant:
+
+### Full Delegation
+
+Standard model where all voting power goes to a single delegate:
+
+```typescript
+// src/lib/tenant/configs/contracts/ens.ts:76
+delegationModel: DELEGATION_MODEL.FULL
+```
+
+```typescript
+// Delegate all tokens to one address
+await tokenContract.delegate(delegateeAddress);
+```
+
+### Partial Delegation
+
+Split voting power across multiple delegates:
+
+```typescript
+// src/lib/tenant/configs/contracts/scroll.ts:110
+delegationModel: DELEGATION_MODEL.PARTIAL
+```
+
+With partial delegation, users can allocate specific amounts to different delegates. Implementation varies by DAO but typically uses a delegation registry contract.
+
+### Advanced Delegation (Alligator)
+
+Supports subdelegation chains with custom rules:
+
+```typescript
+// src/lib/tenant/configs/contracts/optimism.ts:119
+delegationModel: DELEGATION_MODEL.ADVANCED,
+governorType: GOVERNOR_TYPE.ALLIGATOR
+```
+
+Advanced delegation allows:
+- **Subdelegation chains** - Delegates can redelegate to others
+- **Custom rules** - Max redelegations, allowlists, blocklists
+- **Partial subdelegation** - Split delegated power further
+
+```typescript
+// Example subdelegation tracking
+// src/lib/alligatorUtils.ts:41
+interface SubdelegationData {
+  subdelegated_share: number;  // Relative subdelegations
+  subdelegated_amount: number; // Absolute subdelegations
+}
+```
+
+## Token Configuration
+
+Define token details in your tenant config:
+
+```typescript
+// Token factory pattern
+import TenantTokenFactory from "@/lib/tenant/tenantTokenFactory";
+
+const token: TenantToken = {
+  name: "Optimism",
+  symbol: "OP",
+  decimals: 18,
+  address: "0x4200000000000000000000000000000000000042",
+  chainId: 10,
+};
+```
+
+## Multi-Chain Token Support
+
+Aggregate voting power across multiple chains for the same governance token:
+
+```typescript
+// src/lib/votingPowerUtils.ts:68
+if (multiChainTokens && multiChainTokens.length > 1) {
+  const balancePromises = multiChainTokens.map(async (token) => {
+    const chain = getChainById(token.chainId);
+    const chainClient = getPublicClient(chain);
+    
+    const balance = await chainClient.readContract({
+      abi: config.contracts.token.abi,
+      address: token.address,
+      functionName: "balanceOf",
+      args: [address],
+    });
+    
+    return balance;
+  });
+  
+  const balances = await Promise.all(balancePromises);
+  totalBalance = balances.reduce((sum, bal) => sum + bal, BigInt(0));
+}
+```
+
+### Configuration Example
+
+```typescript
+// Multi-chain token setup in UI config
+tokens: [
+  {
+    name: "TOWNS",
+    symbol: "TOWNS",
+    address: "0x...", // Base address
+    chainId: 8453,
+    decimals: 18,
+  },
+  {
+    name: "TOWNS",
+    symbol: "TOWNS",
+    address: "0x...", // Ethereum address
+    chainId: 1,
+    decimals: 18,
+  }
+]
+```
+
+<Info>
+  Voting power from all chains is automatically aggregated. Users see their total power across all configured chains.
+</Info>
+
+## Delegation Actions
+
+### Direct Delegation
+
+Delegate directly from a connected wallet:
+
+```typescript
+import { useWriteContract } from "wagmi";
+
+const { writeContract } = useWriteContract();
+
+await writeContract({
+  address: tokenAddress,
+  abi: tokenAbi,
+  functionName: "delegate",
+  args: [delegateeAddress],
+});
+```
+
+### Gasless Delegation
+
+Delegate without paying gas using EIP-712 signatures:
+
+```typescript
+// User signs delegation message
+const signature = await signTypedData({
+  domain: {
+    name: tokenName,
+    version: "1",
+    chainId,
+    verifyingContract: tokenAddress,
+  },
+  types: {
+    Delegation: [
+      { name: "delegatee", type: "address" },
+      { name: "nonce", type: "uint256" },
+      { name: "expiry", type: "uint256" },
+    ],
+  },
+  primaryType: "Delegation",
+  message: {
+    delegatee,
+    nonce,
+    expiry,
+  },
+});
+
+// Submit to relay API
+await fetch("/api/v1/relay/delegate", {
+  method: "POST",
+  body: JSON.stringify({ signature, delegatee, nonce, expiry }),
+});
+```
+
+See [Gasless Transactions](/advanced/gasless-transactions) for relay implementation.
+
+## Voting Power Display
+
+Format voting power for user interfaces:
+
+```typescript
+// src/lib/votingPowerUtils.ts:132
+export function formatVotingPower(
+  votingPower: bigint,
+  decimals: number = 18
+): number {
+  const divisor = BigInt(10 ** decimals);
+  return Number(votingPower / divisor);
+}
+
+// With decimal precision
+export function formatVotingPowerString(
+  votingPower: bigint,
+  decimals: number = 18,
+  maxDecimals: number = 2
+): string {
+  const divisor = BigInt(10 ** decimals);
+  const wholePart = votingPower / divisor;
+  const fractionalPart = votingPower % divisor;
+  
+  if (fractionalPart === BigInt(0)) {
+    return wholePart.toString();
+  }
+  
+  const fractionalDivisor = BigInt(10 ** (decimals - maxDecimals));
+  const roundedFractional = fractionalPart / fractionalDivisor;
+  const fractionalStr = roundedFractional
+    .toString()
+    .padStart(maxDecimals, "0");
+  
+  return `${wholePart}.${fractionalStr}`;
+}
+```
+
+## Delegation Tracking
+
+Track delegation history and current delegations:
+
+```typescript
+// Query current delegation
+const delegatee = await prisma.delegation.findFirst({
+  where: {
+    from_address: userAddress,
+    dao_slug: tenant.slug,
+  },
+  orderBy: { block_number: "desc" },
+});
+
+// Delegation event structure
+interface Delegation {
+  from: string;      // Delegator address
+  to: string;        // Delegatee address
+  amount?: bigint;   // For partial delegation
+  block_number: number;
+  timestamp: Date;
+}
+```
+
+## Self-Delegation
+
+Users must delegate to themselves to activate voting power:
+
+```typescript
+// Check if user needs to self-delegate
+const votes = await tokenContract.getVotes(address);
+const balance = await tokenContract.balanceOf(address);
+
+if (votes === 0n && balance > 0n) {
+  // User has tokens but hasn't delegated - prompt self-delegation
+  await tokenContract.delegate(address);
+}
+```
+
+<Warning>
+  Token holders must delegate (even to themselves) to activate their voting power. Undelegated tokens cannot vote.
+</Warning>
+
+## Checkpointing
+
+Voting power is checkpointed at the proposal creation block:
+
+```typescript
+// Voting power is snapshot at proposal start
+const votingPower = await tokenContract.getPastVotes(
+  voterAddress,
+  proposalSnapshot
+);
+```
+
+This prevents "double voting" by:
+- Locking voting power at proposal creation time
+- Preventing transfers from affecting active votes
+- Enabling vote replay protection
+
+## Token Decimals
+
+Handle different decimal precisions:
+
+```typescript
+const token = Tenant.current().token;
+
+// Most governance tokens use 18 decimals
+const decimals = token.decimals || 18;
+
+// Convert between units
+const amount = parseUnits("100", decimals);  // 100 tokens -> wei
+const display = formatUnits(amount, decimals); // wei -> "100"
+```
+
+## Advanced Features
+
+### Voting Power Sources
+
+Some DAOs calculate voting power from multiple sources:
+
+```typescript
+// Example: Syndicate combines multiple sources
+interface VotingPowerSources {
+  tokenDelegation: bigint;  // Delegated tokens
+  lpPositions: bigint;      // Liquidity pool positions
+  stakedBalances: bigint;   // Staked tokens
+}
+
+const totalVP = Object.values(sources).reduce(
+  (sum, vp) => sum + vp,
+  BigInt(0)
+);
+```
+
+Enable via toggle:
+
+```typescript
+const includeAlternativeSources = 
+  ui.toggle("include-nonivotes")?.enabled ?? false;
+```
+
+### Delegation Encouragement
+
+Prompt users to delegate if they haven't:
+
+```typescript
+const showDelegationCTA = 
+  ui.toggle("delegation-encouragement")?.enabled ?? false;
+
+if (showDelegationCTA && !hasDelegated) {
+  // Show delegation prompt
+}
+```
+
+## Best Practices
+
+1. **Cache voting power** - Use React Query or SWR to cache contract calls
+2. **Handle zero decimals** - Some tokens use fewer than 18 decimals
+3. **Show delegation status** - Make it clear who users are delegating to
+4. **Checkpoint awareness** - Display voting power at proposal snapshot time
+5. **Multi-chain UX** - Clearly indicate which chains contribute to total VP
+
+## Related Resources
+
+- [Multi-Tenant Architecture](/advanced/multi-tenant) - Configure tokens per tenant
+- [Gasless Transactions](/advanced/gasless-transactions) - Enable free delegation
+- [Attestations](/advanced/attestations) - Verify delegation credentials

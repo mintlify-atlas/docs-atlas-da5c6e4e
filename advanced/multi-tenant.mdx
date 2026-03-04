@@ -1,0 +1,280 @@
+---
+title: "Multi-Tenant Architecture"
+description: "Configure and deploy Agora for multiple DAOs using tenant-based configuration"
+---
+
+Agora's multi-tenant architecture enables a single codebase to power governance portals for multiple DAOs. Each tenant (DAO instance) has its own contracts, UI customization, and feature configuration, all controlled by environment variables and factory patterns.
+
+## Architecture Overview
+
+The multi-tenant system is built on a singleton pattern that loads tenant-specific configurations at runtime based on the `NEXT_PUBLIC_AGORA_INSTANCE_NAME` environment variable.
+
+```typescript
+// Core tenant singleton - src/lib/tenant/tenant.ts:76
+export default class Tenant {
+  private static instance: Tenant;
+
+  public static current(): Tenant {
+    if (!Tenant.instance) {
+      Tenant.instance = new Tenant();
+    }
+    return Tenant.instance;
+  }
+}
+```
+
+### Key Components
+
+The tenant system consists of four main factories:
+
+1. **TenantContractFactory** - Loads blockchain contracts (governor, token, timelock)
+2. **TenantUIFactory** - Loads UI customization (colors, logos, copy)
+3. **TenantTokenFactory** - Configures governance token details
+4. **TenantSlugFactory** - Maps namespace to database slug
+
+## Configuration Structure
+
+### Environment Setup
+
+Set the tenant namespace to determine which DAO configuration loads:
+
+```bash
+# Select your DAO instance
+NEXT_PUBLIC_AGORA_INSTANCE_NAME=optimism
+NEXT_PUBLIC_AGORA_INSTANCE_TOKEN=OP
+NEXT_PUBLIC_AGORA_ENV=prod  # or 'dev' for testnet
+```
+
+<Note>
+  Available tenant namespaces include: `optimism`, `ens`, `uniswap`, `etherfi`, `cyber`, `scroll`, `linea`, `boost`, `xai`, `b3`, `protocol-guild`, `towns`, `syndicate`, and `derive`.
+</Note>
+
+### Contract Configuration
+
+Each tenant defines its contract addresses in `src/lib/tenant/configs/contracts/{namespace}.ts`:
+
+```typescript
+// Example: src/lib/tenant/configs/contracts/ens.ts:24
+export const ensTenantContractConfig = ({
+  isProd,
+  alchemyId,
+}: Props): TenantContracts => {
+  const TOKEN = isProd
+    ? "0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72"
+    : "0xca83e6932cf4F03cDd6238be0fFcF2fe97854f67";
+
+  const GOVERNOR = isProd
+    ? "0x323A76393544d5ecca80cd6ef2A560C6a395b7E3"
+    : "0xb65c031ac61128ae791d42ae43780f012e2f7f89";
+
+  return {
+    token: createTokenContract({...}),
+    governor: new TenantContract<IGovernorContract>({...}),
+    timelock: new TenantContract<ITimelockContract>({...}),
+    delegationModel: DELEGATION_MODEL.FULL,
+    governorType: GOVERNOR_TYPE.ENS,
+  };
+};
+```
+
+### UI Configuration
+
+Customize the UI for each tenant in `src/lib/tenant/configs/ui/{namespace}.ts`:
+
+```typescript
+// Example: src/lib/tenant/configs/ui/optimism.ts:16
+export const optimismTenantUIConfig = new TenantUI({
+  title: "Optimism Agora",
+  logo: optimismLogo,
+  
+  customization: {
+    primary: "0 0 0",
+    secondary: "64 64 64",
+    brandPrimary: "0 0 0",
+    tokenAmountFont: "font-chivoMono",
+  },
+  
+  toggles: [
+    { name: "proposals", enabled: true },
+    { name: "delegates", enabled: true },
+    { name: "proposal-lifecycle", enabled: true },
+  ],
+});
+```
+
+## Adding a New Tenant
+
+Follow these steps to add a new DAO to Agora:
+
+<Steps>
+  <Step title="Add namespace constant">
+    Add your DAO to `src/lib/constants.ts`:
+    
+    ```typescript
+    export const TENANT_NAMESPACES = {
+      OPTIMISM: "optimism",
+      ENS: "ens",
+      YOUR_DAO: "your-dao", // Add here
+    } as const;
+    ```
+  </Step>
+  
+  <Step title="Create contract configuration">
+    Create `src/lib/tenant/configs/contracts/your-dao.ts` with your contract addresses, ABIs, and delegation model.
+  </Step>
+  
+  <Step title="Create UI configuration">
+    Create `src/lib/tenant/configs/ui/your-dao.ts` with branding, colors, and feature toggles.
+  </Step>
+  
+  <Step title="Update factories">
+    Add cases to `TenantContractFactory` and `TenantUIFactory` in their respective files to handle your new namespace.
+  </Step>
+  
+  <Step title="Configure environment">
+    Set `NEXT_PUBLIC_AGORA_INSTANCE_NAME=your-dao` in your `.env.local` file.
+  </Step>
+</Steps>
+
+## Accessing Tenant Data
+
+Access tenant configuration anywhere in your application:
+
+```typescript
+import Tenant from "@/lib/tenant/tenant";
+
+const { contracts, ui, namespace, token } = Tenant.current();
+
+// Access contracts
+const governorAddress = contracts.governor.address;
+const tokenAbi = contracts.token.abi;
+
+// Access UI config
+const primaryColor = ui.customization?.primary;
+const isFeatureEnabled = ui.toggle("proposals")?.enabled;
+
+// Access namespace
+const daoName = namespace; // e.g., "optimism"
+```
+
+## Brand Name Mapping
+
+Customize how your DAO name appears throughout the UI:
+
+```typescript
+// src/lib/tenant/tenant.ts:14
+export const BRAND_NAME_MAPPINGS: Record<string, string> = {
+  ens: "ENS",
+  etherfi: "EtherFi",
+  pguild: "Protocol Guild",
+};
+```
+
+## Delegation Models
+
+Agora supports different delegation models per tenant:
+
+- **FULL** - Standard delegation (one delegatee)
+- **PARTIAL** - Split delegation across multiple delegates
+- **ADVANCED** - Alligator-style subdelegation chains
+
+```typescript
+// Set in contract config
+delegationModel: DELEGATION_MODEL.ADVANCED
+```
+
+## Database Namespacing
+
+Each tenant has its own database schema for isolation:
+
+```typescript
+// Tenant maps to database slug
+import TenantSlugFactory from "@/lib/tenant/tenantSlugFactory";
+
+const slug = TenantSlugFactory.create("optimism"); // Returns DaoSlug enum
+```
+
+Queries automatically scope to the tenant's schema using the slug.
+
+## Feature Toggles
+
+Control features per tenant using the toggle system:
+
+```typescript
+const tenant = Tenant.current();
+
+// Check if feature is enabled
+if (tenant.ui.toggle("proposals")?.enabled) {
+  // Show proposals feature
+}
+
+// Access toggle configuration
+const proposalConfig = tenant.ui.toggle("proposal-lifecycle")?.config;
+```
+
+Common toggles:
+- `proposals` - Enable/disable proposals page
+- `delegates` - Enable/disable delegates page
+- `proposal-lifecycle` - Draft proposal system
+- `delegation-encouragement` - Delegation CTAs
+- `proposal-execute` - On-chain execution
+
+## Multi-Chain Support
+
+Tenants can support tokens across multiple chains:
+
+```typescript
+const tenant = Tenant.current();
+const multiChainTokens = tenant.ui.tokens; // Array of token configs
+
+// Each token has chainId and address
+multiChainTokens.forEach(token => {
+  console.log(`Token on chain ${token.chainId}: ${token.address}`);
+});
+```
+
+Voting power is automatically aggregated across all configured chains. See `src/lib/votingPowerUtils.ts:68` for implementation details.
+
+## Production Considerations
+
+<Warning>
+  Environment configuration is loaded at build time. Changes to `NEXT_PUBLIC_AGORA_INSTANCE_NAME` require a rebuild.
+</Warning>
+
+### Best Practices
+
+1. **Separate deployments** - Deploy each tenant to its own domain for isolation
+2. **Environment variables** - Use different `.env` files per tenant
+3. **Database isolation** - Ensure proper schema separation in your database
+4. **Contract verification** - Always verify mainnet/testnet contract addresses
+5. **Testing** - Test tenant switching locally before deploying
+
+### Example Deployment
+
+```bash
+# Build Optimism instance
+NEXT_PUBLIC_AGORA_INSTANCE_NAME=optimism npm run build
+
+# Build ENS instance
+NEXT_PUBLIC_AGORA_INSTANCE_NAME=ens npm run build
+```
+
+## Troubleshooting
+
+### Tenant not loading
+
+Ensure your namespace is defined in `TENANT_NAMESPACES` and has cases in both factory classes.
+
+### Wrong contracts loading
+
+Check `NEXT_PUBLIC_AGORA_ENV` - it controls prod vs dev contract addresses.
+
+### UI not updating
+
+Restart dev server after changing tenant configuration files.
+
+## Related Resources
+
+- [Governance Tokens](/advanced/governance-tokens) - Token delegation mechanics
+- [Gasless Transactions](/advanced/gasless-transactions) - Relay system configuration
+- [Environment Variables](https://github.com/voteagora/agora-next/blob/main/README.md#environment-variables) - Full environment documentation

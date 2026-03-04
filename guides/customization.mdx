@@ -1,0 +1,774 @@
+---
+title: Customization Guide
+description: Customize your Agora instance with tenant configuration, UI themes, branding, and feature toggles
+---
+
+## Overview
+
+Agora is built as a multi-tenant platform that can be customized for different DAOs. This guide covers how to customize your instance with tenant configuration, UI themes, branding, and feature toggles.
+
+<Info>
+  Agora uses a tenant-based architecture where each DAO has its own configuration, contracts, tokens, and UI theme.
+</Info>
+
+## Tenant Configuration
+
+The tenant system is the foundation of Agora's customization capabilities.
+
+### Understanding Tenants
+
+A tenant represents a DAO instance with its own:
+- **Namespace**: Unique identifier (e.g., `ens`, `optimism`, `uniswap`)
+- **Contracts**: Governance contract addresses
+- **Token**: Governance token configuration
+- **UI Theme**: Colors, logos, branding
+- **Slug**: Database schema identifier
+
+### Tenant Architecture
+
+The tenant system is implemented across several files:
+
+```typescript
+// src/lib/tenant/tenant.ts
+export default class Tenant {
+  private static instance: Tenant;
+  
+  private readonly _namespace: TenantNamespace;
+  private readonly _contracts: TenantContracts;
+  private readonly _token: TenantToken;
+  private readonly _ui: TenantUI;
+  private readonly _slug: DaoSlug;
+  private readonly _brandName: string;
+  
+  // Singleton pattern
+  public static current(): Tenant {
+    if (!Tenant.instance) {
+      Tenant.instance = new Tenant();
+    }
+    return Tenant.instance;
+  }
+}
+```
+
+### Setting Up a New Tenant
+
+<Steps>
+  <Step title="Configure tenant namespace">
+    Set the instance name in your environment variables:
+
+    ```bash
+    NEXT_PUBLIC_AGORA_INSTANCE_NAME=ens
+    NEXT_PUBLIC_AGORA_INSTANCE_TOKEN=ENS
+    NEXT_PUBLIC_AGORA_ENV=prod
+    ```
+
+    **Supported tenants**:
+    - `ens` - ENS DAO
+    - `optimism` - Optimism Collective
+    - `uniswap` - Uniswap DAO
+    - `etherfi` - EtherFi
+    - `boost` - Boost
+    - `cyber` - Cyber
+    - `derive` - Derive
+    - `scroll` - Scroll
+    - `linea` - Linea
+    - `b3` - B3
+    - `pguild` - Protocol Guild
+    - `xai` - Xai
+  </Step>
+
+  <Step title="Add contract configuration">
+    Create contract configuration in `src/lib/tenant/tenantContractFactory.ts`:
+
+    ```typescript
+    case "your-dao":
+      return {
+        governor: {
+          address: "0x...", // Governor contract address
+          abi: GovernorABI,
+        },
+        token: {
+          address: "0x...", // Token contract address
+          abi: TokenABI,
+        },
+        alligator: {
+          address: "0x...", // Alligator (advanced delegation)
+          abi: AlligatorABI,
+        },
+        // Add other contracts as needed
+      };
+    ```
+  </Step>
+
+  <Step title="Configure token details">
+    Add token configuration in `src/lib/tenant/tenantTokenFactory.ts`:
+
+    ```typescript
+    case "your-dao":
+      return {
+        symbol: "TOKEN",
+        name: "Your Token",
+        decimals: 18,
+        address: "0x...",
+      };
+    ```
+  </Step>
+
+  <Step title="Set database slug">
+    Add database slug mapping in `src/lib/tenant/tenantSlugFactory.ts`:
+
+    ```typescript
+    case "your-dao":
+      return "yourdao" as DaoSlug;
+    ```
+
+    This corresponds to the database schema name (e.g., `yourdao.proposals_v2`).
+  </Step>
+
+  <Step title="Configure UI theme">
+    Add UI theme in `src/lib/tenant/tenantUIFactory.ts`:
+
+    ```typescript
+    case "your-dao":
+      return new TenantUI({
+        title: "Your DAO Governance",
+        hero: {
+          headline: "Participate in Your DAO",
+          description: "Vote, delegate, and participate in governance",
+        },
+        ui: {
+          toggle: "default", // or "op" for Optimism-style
+        },
+      });
+    ```
+  </Step>
+</Steps>
+
+### Brand Name Customization
+
+Customize brand names in `src/lib/tenant/tenant.ts`:
+
+```typescript
+export const BRAND_NAME_MAPPINGS: Record<string, string> = {
+  ens: "ENS",
+  etherfi: "EtherFi",
+  pguild: "Protocol Guild",
+  boost: "Boost",
+  demo: "Canopy",
+  "your-dao": "Your DAO Name",
+};
+```
+
+## UI Themes and Styling
+
+Agora uses a combination of Tailwind CSS, SCSS, and Emotion for styling.
+
+### Theme System
+
+There are three theme files that must be kept in sync:
+
+1. **`src/styles/theme.js`** - JavaScript theme object (for Emotion)
+2. **`src/styles/variables.scss`** - SCSS variables
+3. **`tailwind.config.js`** - Tailwind configuration
+
+### Customizing Colors
+
+<Tabs>
+  <Tab title="theme.js">
+    ```javascript
+    // src/styles/theme.js
+    export const theme = {
+      colors: {
+        primary: '#5050ED',      // Primary brand color
+        secondary: '#F0F0F0',    // Secondary color
+        brandPrimary: '#5050ED', // Brand primary
+        brandSecondary: '#1C1C1C', // Brand secondary
+        wash: '#F5F5F5',         // Background wash
+        line: '#E6E6E6',         // Border/line color
+        // ... add more colors
+      },
+    };
+    ```
+  </Tab>
+  <Tab title="variables.scss">
+    ```scss
+    // src/styles/variables.scss
+    $color-primary: #5050ed;
+    $color-secondary: #f0f0f0;
+    $color-brand-primary: #5050ed;
+    $color-brand-secondary: #1c1c1c;
+    $color-wash: #f5f5f5;
+    $color-line: #e6e6e6;
+    ```
+  </Tab>
+  <Tab title="tailwind.config.js">
+    ```javascript
+    // tailwind.config.js
+    module.exports = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#5050ED',
+            secondary: '#F0F0F0',
+            'brand-primary': '#5050ED',
+            'brand-secondary': '#1C1C1C',
+            wash: '#F5F5F5',
+            line: '#E6E6E6',
+          },
+        },
+      },
+    };
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  When adding or modifying theme colors, update all three files to maintain consistency.
+</Warning>
+
+### Typography
+
+Customize fonts and typography:
+
+```scss
+// src/styles/variables.scss
+$font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+$font-family-mono: 'JetBrains Mono', 'Courier New', monospace;
+
+$font-size-base: 16px;
+$font-size-lg: 18px;
+$font-size-sm: 14px;
+$font-size-xs: 12px;
+
+$font-weight-normal: 400;
+$font-weight-medium: 500;
+$font-weight-semibold: 600;
+$font-weight-bold: 700;
+```
+
+### Component Styling
+
+Agora uses a component-based styling approach:
+
+<CodeGroup>
+```tsx Component.tsx
+// components/Hero/Hero.tsx
+import styles from './Hero.module.scss';
+
+export function Hero() {
+  return (
+    <div className={styles.hero}>
+      <h1 className={styles.headline}>Welcome to Governance</h1>
+      <p className={styles.description}>Participate in decision making</p>
+    </div>
+  );
+}
+```
+
+```scss Hero.module.scss
+// components/Hero/Hero.module.scss
+@import '@/styles/variables.scss';
+
+.hero {
+  padding: 4rem 2rem;
+  background: linear-gradient(135deg, $color-brand-primary 0%, $color-brand-secondary 100%);
+  color: white;
+}
+
+.headline {
+  font-size: 3rem;
+  font-weight: $font-weight-bold;
+  margin-bottom: 1rem;
+}
+
+.description {
+  font-size: $font-size-lg;
+  opacity: 0.9;
+}
+```
+</CodeGroup>
+
+### Using Tailwind CSS
+
+For utility classes, use Tailwind directly:
+
+```tsx
+<div className="container mx-auto px-4 sm:px-8">
+  <div className="bg-white rounded-lg shadow-md p-6">
+    <h2 className="text-2xl font-bold text-gray-900 mb-4">
+      Proposal Title
+    </h2>
+    <p className="text-gray-600">
+      Proposal description...
+    </p>
+  </div>
+</div>
+```
+
+### Global Styles
+
+Global styles should be prefixed with `gl_` and imported into `src/styles/globals.scss`:
+
+```scss
+// components/Layout/PageContainer.module.scss
+.gl_bg-dotted-pattern {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: radial-gradient(circle, #ddd 1px, transparent 1px);
+  background-size: 20px 20px;
+  pointer-events: none;
+  z-index: -1;
+}
+```
+
+Then import in `globals.scss`:
+
+```scss
+// src/styles/globals.scss
+@import '../components/Layout/PageContainer.module.scss';
+```
+
+## Branding Customization
+
+### Logo and Icons
+
+<Steps>
+  <Step title="Add logo assets">
+    Place logo files in `src/assets/` or `public/` directory:
+
+    ```
+    public/
+    ├── logo.svg
+    ├── logo-dark.svg
+    ├── favicon.ico
+    └── og-image.png
+    ```
+  </Step>
+
+  <Step title="Update logo references">
+    Update logo imports in components:
+
+    ```tsx
+    import Logo from '@/assets/logo.svg';
+
+    export function Header() {
+      return (
+        <header>
+          <Image src={Logo} alt="DAO Name" width={120} height={40} />
+        </header>
+      );
+    }
+    ```
+  </Step>
+
+  <Step title="Configure metadata">
+    Update metadata in `src/app/layout.tsx`:
+
+    ```tsx
+    export const metadata = {
+      title: 'Your DAO Governance',
+      description: 'Participate in Your DAO governance',
+      icons: {
+        icon: '/favicon.ico',
+        apple: '/apple-touch-icon.png',
+      },
+      openGraph: {
+        title: 'Your DAO Governance',
+        description: 'Vote, delegate, and participate',
+        images: ['/og-image.png'],
+      },
+    };
+    ```
+  </Step>
+</Steps>
+
+### Page Title and Hero
+
+Customize the homepage hero section in tenant UI configuration:
+
+```typescript
+// src/lib/tenant/tenantUIFactory.ts
+new TenantUI({
+  title: "Your DAO Governance",
+  hero: {
+    headline: "Shape the Future of Your DAO",
+    description: "Vote on proposals, delegate your voting power, and participate in governance decisions that matter.",
+    cta: {
+      text: "Get Started",
+      link: "/proposals",
+    },
+  },
+  // ... other UI config
+})
+```
+
+## Feature Toggles
+
+Control features using environment variables and configuration.
+
+### Environment-Based Features
+
+<AccordionGroup>
+  <Accordion title="Sign-In with Ethereum (SIWE)">
+    Enable wallet-based authentication:
+
+    ```bash
+    NEXT_PUBLIC_SIWE_ENABLED=true
+    ```
+
+    **Implementation**:
+    ```typescript
+    const siweEnabled = process.env.NEXT_PUBLIC_SIWE_ENABLED === 'true';
+
+    if (siweEnabled) {
+      // Show SIWE login option
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Analytics and Metrics">
+    Enable business intelligence metrics capture:
+
+    ```bash
+    NEXT_PUBLIC_ENABLE_BI_METRICS_CAPTURE=true
+    NEXT_PUBLIC_AGORA_API_KEY=your_api_key
+    ```
+
+    **Usage**:
+    ```typescript
+    if (process.env.NEXT_PUBLIC_ENABLE_BI_METRICS_CAPTURE === 'true') {
+      trackEvent('proposal_viewed', { proposalId });
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Transaction Simulation">
+    Enable Tenderly transaction simulation:
+
+    ```bash
+    TENDERLY_USER=your_username
+    TENDERLY_PROJECT=your_project
+    TENDERLY_ACCESS_KEY=your_access_key
+    ```
+
+    Simulation features automatically activate when all three are set.
+  </Accordion>
+
+  <Accordion title="Gasless Transactions">
+    Enable gas sponsoring for delegations and votes:
+
+    ```bash
+    GAS_SPONSOR_PK=your_private_key
+    ```
+
+    Users can delegate/vote without paying gas fees.
+  </Accordion>
+
+  <Accordion title="Advanced Delegation (Alligator)">
+    Enable Alligator advanced delegation features:
+
+    Configure in tenant contracts:
+    ```typescript
+    alligator: {
+      address: "0x...",
+      abi: AlligatorABI,
+    }
+    ```
+
+    Enables:
+    - Subdelegation with rules
+    - Partial delegation
+    - Authority chains
+  </Accordion>
+</AccordionGroup>
+
+### Code-Based Feature Flags
+
+Implement feature flags in tenant UI configuration:
+
+```typescript
+// src/lib/tenant/tenantUIFactory.ts
+new TenantUI({
+  features: {
+    advancedDelegation: true,
+    proposalSimulation: true,
+    snapshotIntegration: false,
+    retroFunding: false, // Optimism-specific
+  },
+  ui: {
+    toggle: "default", // or "op" for Optimism-style UI
+  },
+})
+```
+
+Use in components:
+
+```typescript
+import Tenant from '@/lib/tenant/tenant';
+
+const tenant = Tenant.current();
+
+if (tenant.ui.features?.advancedDelegation) {
+  // Show advanced delegation UI
+}
+```
+
+## Custom DAO Configuration
+
+Configure DAO-specific settings and behavior.
+
+### Proposal Types
+
+Customize proposal types based on your governance system:
+
+```typescript
+// Different DAOs support different proposal types
+const proposalTypes = {
+  ens: ['social', 'executable'],
+  optimism: ['social', 'standard', 'approval'],
+  uniswap: ['social', 'onchain'],
+};
+```
+
+### Voting Parameters
+
+Configure voting parameters:
+
+```typescript
+const votingConfig = {
+  quorum: "4000000", // 4M tokens
+  proposalThreshold: "100000", // 100K tokens to propose
+  votingDelay: 13140, // ~2 days in blocks
+  votingPeriod: 46080, // ~7 days in blocks
+};
+```
+
+### Snapshot Integration
+
+Configure Snapshot space:
+
+```bash
+# Production space
+REACT_APP_DEPLOY_ENV=prod
+
+# Test space
+TESTNET_SNAPSHOT_SPACE=test-dao.eth
+```
+
+## Advanced Customization
+
+### Custom Components
+
+<Steps>
+  <Step title="Create component">
+    Create a new component following the standard structure:
+
+    ```
+    src/components/CustomFeature/
+    ├── CustomFeature.tsx
+    ├── CustomFeature.module.scss
+    └── index.ts
+    ```
+  </Step>
+
+  <Step title="Implement component">
+    ```tsx
+    // CustomFeature.tsx
+    import styles from './CustomFeature.module.scss';
+
+    export function CustomFeature() {
+      return (
+        <div className={styles.container}>
+          {/* Your custom feature */}
+        </div>
+      );
+    }
+    ```
+  </Step>
+
+  <Step title="Add styles">
+    ```scss
+    // CustomFeature.module.scss
+    @import '@/styles/variables.scss';
+
+    .container {
+      padding: 2rem;
+      background: $color-wash;
+    }
+    ```
+  </Step>
+
+  <Step title="Export component">
+    ```typescript
+    // index.ts
+    export { CustomFeature } from './CustomFeature';
+    ```
+  </Step>
+</Steps>
+
+### Custom API Endpoints
+
+Add custom API routes:
+
+```typescript
+// src/app/api/v1/custom/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  // Your custom API logic
+  return NextResponse.json({ data: 'custom response' });
+}
+```
+
+### Database Schema Extensions
+
+While the main schema is managed externally, you can add tenant-specific views:
+
+```sql
+-- Custom view for your DAO
+CREATE VIEW yourdao.custom_metrics AS
+SELECT 
+  delegate,
+  COUNT(*) as proposal_count,
+  SUM(voting_power) as total_vp
+FROM yourdao.votes
+GROUP BY delegate;
+```
+
+Then add to Prisma schema and regenerate:
+
+```bash
+npx prisma db pull
+npx prisma generate
+```
+
+## Testing Customizations
+
+### Local Testing
+
+<Steps>
+  <Step title="Set development environment">
+    ```bash
+    NEXT_PUBLIC_AGORA_ENV=dev
+    NEXT_PUBLIC_AGORA_INSTANCE_NAME=your-dao
+    ```
+  </Step>
+
+  <Step title="Run development server">
+    ```bash
+    npm run dev
+    ```
+  </Step>
+
+  <Step title="Test features">
+    - Verify UI theme loads correctly
+    - Test contract interactions
+    - Check database queries
+    - Validate feature toggles
+  </Step>
+
+  <Step title="Run quality checks">
+    ```bash
+    npm run prettier-src
+    npm run lint
+    npm run typecheck
+    ```
+  </Step>
+</Steps>
+
+### Preview Deployments
+
+Use Vercel preview deployments to test customizations:
+
+1. Create a feature branch
+2. Push changes
+3. Vercel automatically creates preview deployment
+4. Test with preview environment variables
+5. Merge to main when ready
+
+## Best Practices
+
+<Check>
+  Follow these best practices when customizing Agora:
+</Check>
+
+1. **Keep theme files in sync** - Update all three theme files when changing colors
+2. **Use semantic naming** - Name colors and variables based on purpose, not appearance
+3. **Test across tenants** - Ensure changes don't break other tenant configurations
+4. **Document customizations** - Add comments explaining tenant-specific logic
+5. **Follow TypeScript conventions** - Use proper typing for all customizations
+6. **Maintain backwards compatibility** - Don't break existing tenant configurations
+7. **Use feature flags** - Make new features opt-in via configuration
+8. **Keep components reusable** - Design components to work across tenants
+
+## Examples
+
+### Complete Tenant Setup Example
+
+<CodeGroup>
+```typescript tenantContractFactory.ts
+// Add to switch statement
+case "example-dao":
+  return {
+    governor: {
+      address: "0x1234567890123456789012345678901234567890",
+      abi: GovernorABI,
+    },
+    token: {
+      address: "0x0987654321098765432109876543210987654321",
+      abi: TokenABI,
+    },
+  };
+```
+
+```typescript tenantTokenFactory.ts
+case "example-dao":
+  return {
+    symbol: "EXMPL",
+    name: "Example Token",
+    decimals: 18,
+    address: "0x0987654321098765432109876543210987654321",
+  };
+```
+
+```typescript tenantUIFactory.ts
+case "example-dao":
+  return new TenantUI({
+    title: "Example DAO Governance",
+    hero: {
+      headline: "Govern Example DAO",
+      description: "Participate in shaping our protocol",
+    },
+    features: {
+      advancedDelegation: true,
+      proposalSimulation: true,
+    },
+  });
+```
+
+```bash .env.local
+NEXT_PUBLIC_AGORA_INSTANCE_NAME=example-dao
+NEXT_PUBLIC_AGORA_INSTANCE_TOKEN=EXMPL
+NEXT_PUBLIC_AGORA_ENV=dev
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Learn about all environment variables
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/guides/deployment">
+    Deploy your customized instance
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand the application structure
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore the API endpoints
+  </Card>
+</CardGroup>

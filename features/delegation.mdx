@@ -1,0 +1,421 @@
+---
+title: Delegation
+description: Delegate your voting power to trusted representatives in your DAO
+---
+
+Delegation allows you to assign your voting power to another address, enabling more efficient governance participation while maintaining your token ownership.
+
+## Overview
+
+The delegation system enables:
+
+- **Delegate voting power** to trusted community members
+- **Become a delegate** and represent others
+- **Track delegations** in real-time
+- **Partial delegation** for granular control
+- **View delegate profiles** and voting history
+
+## Understanding Delegation
+
+<Note>
+  Delegation does not transfer token ownership - you retain full control of your tokens while giving another address the right to vote on your behalf.
+</Note>
+
+### How It Works
+
+<Steps>
+  <Step title="Choose a Delegate">
+    Browse delegates and review their voting history, statements, and participation
+  </Step>
+  <Step title="Delegate Tokens">
+    Assign your voting power through a simple transaction
+  </Step>
+  <Step title="Delegation Active">
+    Your delegate can now vote using your combined voting power
+  </Step>
+  <Step title="Monitor Performance">
+    Track how your delegate votes and their participation rate
+  </Step>
+</Steps>
+
+### Benefits
+
+<CardGroup cols={2}>
+  <Card title="For Token Holders" icon="user">
+    Participate in governance without constant monitoring. Your voting power is used effectively by knowledgeable delegates.
+  </Card>
+  <Card title="For the DAO" icon="building-columns">
+    Higher participation rates and more informed decisions through concentrated expertise.
+  </Card>
+</CardGroup>
+
+## Finding Delegates
+
+Access the delegates page at `/delegates` to explore options:
+
+### Sorting Options
+
+<Tabs>
+  <Tab title="By Voting Power">
+    View delegates with the most delegated tokens (default sort)
+  </Tab>
+  <Tab title="By Delegator Count">
+    See delegates with the most individual delegators
+  </Tab>
+  <Tab title="Recent Activity">
+    Find newly active delegates or recent delegation changes
+  </Tab>
+  <Tab title="Weighted Random">
+    Discover delegates with a randomized, voting-power-weighted selection
+  </Tab>
+</Tabs>
+
+### Filtering Delegates
+
+Narrow your search using filters:
+
+- **Top Issues** - Delegates focused on specific governance areas
+- **Stakeholder Types** - Filter by represented stakeholder groups
+- **Endorsed Delegates** - Community-verified representatives
+- **Has Statement** - Delegates with detailed platform statements
+
+<CodeGroup>
+```typescript src/app/api/common/delegates/getDelegates.ts
+async function getDelegates({
+  pagination,
+  sort,
+  filters,
+}: {
+  pagination?: PaginationParams;
+  sort: string;
+  filters?: {
+    delegator?: `0x${string}`;
+    issues?: string;
+    stakeholders?: string;
+    endorsed?: boolean;
+    hasStatement?: boolean;
+  };
+}) {
+  const delegates = await fetchDelegatesFromDaoNode({
+    sortBy: sort,
+    filters,
+    limit: pagination?.limit,
+    offset: pagination?.offset,
+  });
+  
+  return delegates;
+}
+```
+</CodeGroup>
+
+## Delegate Profiles
+
+Each delegate has a profile page at `/delegates/[address]` showing:
+
+### Profile Information
+
+- **Voting power** - Total delegated tokens
+  - Direct voting power (self-delegated)
+  - Advanced voting power (from partial delegations)
+- **Delegator count** - Number of addresses delegating
+- **Participation rate** - Percentage of proposals voted on
+- **Voting history** - Recent votes and rationale
+
+### Delegate Statement
+
+Delegates can publish statements including:
+
+<AccordionGroup>
+  <Accordion title="About the Delegate">
+    Background, expertise, and governance philosophy
+  </Accordion>
+  
+  <Accordion title="Top Issues">
+    Key areas of focus and expertise
+  </Accordion>
+  
+  <Accordion title="Stakeholder Representation">
+    Which groups or interests they represent
+  </Accordion>
+  
+  <Accordion title="Social Links">
+    Twitter, Discord, Warpcast, and other contact methods
+  </Accordion>
+</AccordionGroup>
+
+<CodeGroup>
+```typescript Delegate Data Structure
+type Delegate = {
+  address: string;
+  votingPower: {
+    total: string;
+    direct: string;
+    advanced: string;
+  };
+  votingPowerRelativeToQuorum: number;
+  proposalsVotedOn: bigint;
+  votingParticipation: number;
+  numOfDelegators: bigint;
+  statement: DelegateStatement | null;
+};
+```
+</CodeGroup>
+
+## Delegating Your Tokens
+
+<Warning>
+  Ensure you trust your chosen delegate - they will vote on your behalf for all proposals.
+</Warning>
+
+### Standard Delegation
+
+<Steps>
+  <Step title="Connect Wallet">
+    Ensure your wallet is connected to the platform
+  </Step>
+  
+  <Step title="Choose Delegate">
+    Navigate to the delegate's profile page
+  </Step>
+  
+  <Step title="Click Delegate Button">
+    Select "Delegate" on their profile
+  </Step>
+  
+  <Step title="Confirm Transaction">
+    Sign the delegation transaction in your wallet
+  </Step>
+  
+  <Step title="Delegation Active">
+    Your voting power is now delegated (takes effect at next block)
+  </Step>
+</Steps>
+
+### Self-Delegation
+
+You can delegate to yourself to vote directly:
+
+```typescript
+// Delegate tokens to your own address
+const delegateToSelf = async (address: `0x${string}`) => {
+  // This gives you direct voting power instead of being inactive
+  await delegate(address);
+};
+```
+
+<Note>
+  Self-delegation is required to vote directly with your tokens. Without delegation (to self or others), your tokens don't contribute to governance.
+</Note>
+
+### Partial Delegation
+
+Some DAOs support advanced delegation features:
+
+- **Split delegation** - Delegate to multiple addresses
+- **Conditional delegation** - Set rules for when delegation applies
+- **Percentage-based** - Delegate only a portion of your voting power
+
+<CodeGroup>
+```typescript Advanced Delegation
+// Check if advanced delegation is supported
+const { contracts } = Tenant.current();
+const supportsAdvanced = !!contracts.alligator;
+
+if (supportsAdvanced) {
+  // Partial delegation to multiple delegates
+  await partialDelegate([
+    { delegate: address1, amount: 1000 },
+    { delegate: address2, amount: 500 }
+  ]);
+}
+```
+</CodeGroup>
+
+## Managing Delegations
+
+### Viewing Your Delegations
+
+Check your delegation status:
+
+- Navigate to your profile page
+- View "Delegations" tab
+- See all addresses you've delegated to
+- Review amounts and delegation dates
+
+### Changing Delegates
+
+You can change your delegate at any time:
+
+<Steps>
+  <Step title="Choose New Delegate">
+    Find the delegate you want to switch to
+  </Step>
+  
+  <Step title="Delegate Again">
+    Click delegate on the new delegate's profile
+  </Step>
+  
+  <Step title="Previous Delegation Replaced">
+    Your old delegation is automatically revoked
+  </Step>
+</Steps>
+
+<Note>
+  Delegation changes take effect in the next block. Active proposals use the delegation state at their snapshot block.
+</Note>
+
+### Revoking Delegation
+
+To stop delegating:
+
+1. Delegate to your own address (self-delegation)
+2. Or delegate to a different address
+3. Your tokens remain in your wallet throughout
+
+## Becoming a Delegate
+
+### Creating Your Statement
+
+<Steps>
+  <Step title="Navigate to Create Statement">
+    Go to `/delegates/create` or edit from your profile
+  </Step>
+  
+  <Step title="Fill Out Profile">
+    Add your background, expertise, and governance philosophy
+  </Step>
+  
+  <Step title="Select Top Issues">
+    Choose your areas of focus
+  </Step>
+  
+  <Step title="Add Social Links">
+    Connect Twitter, Discord, Warpcast for communication
+  </Step>
+  
+  <Step title="Sign and Publish">
+    Sign the statement with your wallet to publish
+  </Step>
+</Steps>
+
+### Best Practices for Delegates
+
+<AccordionGroup>
+  <Accordion title="Maintain Active Participation">
+    - Vote on all proposals when possible
+    - Provide reasoning for your votes
+    - Aim for 80%+ participation rate
+    - Stay informed on governance discussions
+  </Accordion>
+  
+  <Accordion title="Transparent Communication">
+    - Keep your statement up to date
+    - Explain voting decisions publicly
+    - Engage with delegators' questions
+    - Announce any conflicts of interest
+  </Accordion>
+  
+  <Accordion title="Consistent Engagement">
+    - Participate in forum discussions
+    - Attend community calls
+    - Review proposals thoroughly
+    - Collaborate with other delegates
+  </Accordion>
+</AccordionGroup>
+
+## Delegation Analytics
+
+### Tracking Metrics
+
+Monitor delegation health:
+
+- **Delegation concentration** - Distribution of voting power
+- **Participation rates** - Delegate voting activity
+- **Delegation changes** - Trends in delegator behavior
+- **New delegators** - Growing delegate base
+
+<CodeGroup>
+```typescript Fetching Delegation Stats
+import { fetchDelegate } from '@/app/api/common/delegates/getDelegates';
+
+const delegate = await fetchDelegate(address);
+
+console.log({
+  votingPower: delegate.votingPower.total,
+  delegators: delegate.numOfDelegators,
+  participation: delegate.votingParticipation,
+  votedOn: delegate.proposalsVotedOn
+});
+```
+</CodeGroup>
+
+## API Integration
+
+### Fetching Delegates List
+
+```typescript
+import { fetchDelegates } from '@/app/api/common/delegates/getDelegates';
+
+const result = await fetchDelegates({
+  pagination: { limit: 20, offset: 0 },
+  sort: 'voting_power',
+  filters: {
+    endorsed: true,
+    hasStatement: true
+  }
+});
+
+console.log(result.data); // Array of delegates
+```
+
+### Getting Delegate Details
+
+```typescript
+import { fetchDelegate } from '@/app/api/common/delegates/getDelegates';
+
+// Works with address or ENS name
+const delegate = await fetchDelegate('vitalik.eth');
+
+console.log(delegate.statement?.payload?.delegateStatement);
+```
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Voting" href="/features/voting" icon="square-check">
+    Cast votes on proposals using delegated power
+  </Card>
+  
+  <Card title="Proposals" href="/features/proposals" icon="file-lines">
+    Create and vote on governance proposals
+  </Card>
+  
+  <Card title="Forums" href="/features/forums" icon="comments">
+    Discuss governance with delegates and community
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Delegation not showing">
+    - Wait for transaction confirmation (1-2 blocks)
+    - Refresh the page
+    - Check transaction status on block explorer
+    - Ensure you're on the correct network
+  </Accordion>
+  
+  <Accordion title="Cannot delegate">
+    - Verify you have tokens in your wallet
+    - Check wallet connection
+    - Ensure sufficient ETH for gas fees
+    - Confirm the DAO supports delegation
+  </Accordion>
+  
+  <Accordion title="Voting power incorrect">
+    - Voting power is snapshot at proposal creation
+    - Recent delegations don't affect existing proposals
+    - Check delegation status at the snapshot block
+    - Consider token balance at snapshot time
+  </Accordion>
+</AccordionGroup>

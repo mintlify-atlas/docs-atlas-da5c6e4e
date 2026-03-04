@@ -1,80 +1,451 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quickstart Guide"
+description: "Set up Agora locally and create your first governance proposal in minutes"
 ---
 
-## Get started in three steps
+## Overview
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide will walk you through setting up Agora locally, configuring your DAO instance, and creating your first governance proposal. You'll have a fully functional governance platform running in under 15 minutes.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  This guide assumes you have basic familiarity with Next.js, TypeScript, and PostgreSQL. You'll also need Node.js 18+ and npm installed.
 </Note>
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+<Steps>
+  <Step title="Development tools">
+    - **Node.js 18+** and **npm** installed
+    - **Git** for cloning the repository
+    - **PostgreSQL** database (local or remote)
+    - Code editor (VS Code recommended)
+  </Step>
+  
+  <Step title="API keys and accounts">
+    - **Alchemy API key** for blockchain RPC access ([Get one free](https://www.alchemy.com/))
+    - **WalletConnect Project ID** ([Create project](https://cloud.walletconnect.com/))
+    - **Database connection strings** for PostgreSQL
+  </Step>
+  
+  <Step title="Optional services">
+    - **Pinata credentials** for IPFS storage (optional)
+    - **Tenderly account** for transaction simulation (optional)
+    - **Etherscan API key** for contract verification (optional)
+  </Step>
+</Steps>
+
+## Step 1: Clone and Install
+
+First, clone the Agora repository and install dependencies:
+
+```bash
+# Clone the repository
+git clone https://github.com/voteagora/agora-next.git
+cd agora-next
+
+# Install dependencies
+npm install
+```
+
+<Info>
+  The installation process will also generate TypeChain types and Prisma client automatically.
+</Info>
+
+## Step 2: Configure Environment Variables
+
+Create a `.env.local` file in the project root. You can start by copying the sample file:
+
+```bash
+cp env.sample .env.local
+```
+
+Now configure the essential environment variables:
+
+### Core Configuration
+
+These variables are **required** for Agora to run:
+
+```bash .env.local
+# DAO Configuration
+NEXT_PUBLIC_AGORA_INSTANCE_NAME=ens
+NEXT_PUBLIC_AGORA_INSTANCE_TOKEN=ENS
+NEXT_PUBLIC_AGORA_ENV=dev
+
+# Base URL
+NEXT_PUBLIC_AGORA_BASE_URL=http://localhost:3000/api/v1
+```
+
+<Warning>
+  `NEXT_PUBLIC_AGORA_INSTANCE_NAME` must match one of the configured tenants: `ens`, `optimism`, `uniswap`, `derive`, `cyber`, `xai`, `boost`, `scroll`, `linea`, `etherfi`, `b3`, or `protocol-guild`.
+</Warning>
+
+### Blockchain RPC Configuration
+
+Add your Alchemy API keys for blockchain access:
+
+```bash .env.local
+# Client-side RPC (browser)
+NEXT_PUBLIC_ALCHEMY_ID=your_alchemy_api_key
+
+# Server-side RPC (recommended for better security)
+SERVERSIDE_ALCHEMY_ID_DEV=your_dev_alchemy_key
+SERVERSIDE_ALCHEMY_ID_PROD=your_prod_alchemy_key
+```
+
+<Tip>
+  Use separate Alchemy keys for client and server to prevent leaked keys from affecting server operations. Domain-whitelist the client key in your Alchemy dashboard.
+</Tip>
+
+### Database Configuration
+
+Configure PostgreSQL connection strings:
+
+```bash .env.local
+# Simple approach: Single database URL
+DATABASE_URL=postgres://user:password@localhost:5432/agora_dev
+
+# Advanced: Separate read/write databases
+READ_WRITE_WEB2_DATABASE_URL_DEV=postgres://user:password@localhost:5432/agora_web2_dev
+READ_ONLY_WEB3_DATABASE_URL_DEV=postgres://user:password@localhost:5432/agora_web3_dev
+```
+
+<Info>
+  Agora uses a dual-database pattern:
+  - **WEB2 Database**: User-generated content (profiles, settings, forum posts)
+  - **WEB3 Database**: Blockchain-indexed data (proposals, votes, delegates)
+  
+  For local development, you can use the same database for both.
+</Info>
+
+### Wallet Connection
+
+Add your WalletConnect Project ID:
+
+```bash .env.local
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_walletconnect_project_id
+```
+
+### Authentication
+
+Generate a JWT secret for user sessions:
+
+```bash .env.local
+JWT_SECRET=your-secure-random-string-at-least-32-characters
+```
+
+<Tip>
+  Generate a secure JWT secret with: `openssl rand -base64 32`
+</Tip>
+
+## Step 3: Set Up the Database
+
+Agora uses Prisma as its ORM. Pull the latest schema and generate the Prisma client:
+
+```bash
+# Pull the latest database schema
+npx prisma db pull
+
+# Generate Prisma client
+npx prisma generate
+```
+
+<Warning>
+  The database schema is managed in a separate repository. You'll need access to a pre-configured Agora database or set up your own using the [queries repository](https://github.com/voteagora/queries).
+</Warning>
+
+### Database Structure
+
+Agora uses a multi-schema PostgreSQL database:
+
+- **agora**: Shared cross-tenant data
+- **config**: Configuration and contracts
+- **[dao-namespace]**: DAO-specific data (e.g., `ens`, `optimism`, `uniswap`)
+
+Each DAO tenant has its own schema with tables for proposals, votes, delegates, and more.
+
+## Step 4: Start the Development Server
+
+Now you're ready to run Agora locally:
+
+```bash
+npm run dev
+```
+
+This command will:
+1. Generate TypeChain types from contract ABIs
+2. Generate the Prisma client
+3. Start the Next.js development server on `http://localhost:3000`
+
+<Info>
+  The development server supports hot reload. Changes to your code will automatically refresh the browser.
+</Info>
+
+Open [http://localhost:3000](http://localhost:3000) in your browser. You should see the Agora governance interface for your configured DAO.
+
+## Step 5: Connect Your Wallet
+
+To interact with Agora, you'll need to connect a wallet:
+
+<Steps>
+  <Step title="Click Connect Wallet">
+    Click the **Connect Wallet** button in the top-right corner.
+  </Step>
+  
+  <Step title="Choose your wallet">
+    Select from supported wallets: MetaMask, WalletConnect, Coinbase Wallet, etc.
+  </Step>
+  
+  <Step title="Approve the connection">
+    Approve the connection request in your wallet.
+  </Step>
+  
+  <Step title="Sign in (optional)">
+    If SIWE (Sign-In with Ethereum) is enabled, sign a message to authenticate.
+  </Step>
+</Steps>
+
+<Tip>
+  For testing, make sure your wallet is connected to the correct network for your DAO (Mainnet for ENS, Optimism for OP, etc.).
+</Tip>
+
+## Step 6: Create Your First Proposal
+
+Now let's create a governance proposal:
+
+### Option A: Using the UI
+
+If your tenant has the `easv2-govlessvoting` feature enabled:
+
+<Steps>
+  <Step title="Navigate to Create">
+    Go to `/create` in your browser or click **Create Proposal** in the navigation.
+  </Step>
+  
+  <Step title="Choose proposal type">
+    Select between:
+    - **Temp Check**: Off-chain temperature check via Snapshot or EAS
+    - **Gov Proposal**: Full onchain governance proposal
+  </Step>
+  
+  <Step title="Fill in details">
+    Enter proposal information:
+    - **Title**: Clear, descriptive title
+    - **Description**: Detailed proposal body (supports markdown)
+    - **Proposal Type**: Standard, approval voting, etc.
+    - **Voting Period**: Start and end times
+  </Step>
+  
+  <Step title="Add transactions (onchain only)">
+    For onchain proposals, add executable transactions:
+    - Target contract addresses
+    - Function calls and parameters
+    - ETH values (if sending funds)
+  </Step>
+  
+  <Step title="Submit">
+    Review and submit your proposal. You'll need to sign a transaction or message.
+  </Step>
+</Steps>
+
+### Option B: Using the API
+
+Create a proposal programmatically:
+
+```typescript
+const response = await fetch('http://localhost:3000/api/v1/proposals', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${apiKey}`
+  },
+  body: JSON.stringify({
+    title: 'Treasury Allocation for Q2 Development',
+    description: `## Summary\n\nThis proposal allocates 100,000 tokens from the treasury for Q2 development work.\n\n## Details\n\n- Team expansion: 50,000 tokens\n- Infrastructure: 30,000 tokens\n- Marketing: 20,000 tokens`,
+    targets: [treasuryContractAddress],
+    values: ['0'],
+    calldatas: [encodedTransferCalldata],
+    proposalType: 'standard'
+  })
+});
+
+const proposal = await response.json();
+console.log('Proposal created:', proposal.id);
+```
+
+<Info>
+  API authentication requires an API key. Generate one using the CLI: `npm run generate-apikey -- --email user@example.com --address 0x... --chain-id 1 --description "API access"`
+</Info>
+
+## Step 7: Vote on a Proposal
+
+Once a proposal is active, you can vote:
+
+### Using the UI
+
+<Steps>
+  <Step title="Navigate to proposal">
+    Go to `/proposals/[proposal-id]` or click on a proposal from the list.
+  </Step>
+  
+  <Step title="Review details">
+    Read the proposal description, transactions, and current vote counts.
+  </Step>
+  
+  <Step title="Cast your vote">
+    Click **For**, **Against**, or **Abstain** and confirm the transaction.
+  </Step>
+  
+  <Step title="Add a reason (optional)">
+    Include a text explanation for your vote.
+  </Step>
+</Steps>
+
+### Using the API
+
+```typescript
+const response = await fetch(`http://localhost:3000/api/v1/proposals/${proposalId}/vote`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${apiKey}`
+  },
+  body: JSON.stringify({
+    support: 1, // 0 = Against, 1 = For, 2 = Abstain
+    reason: 'I support this allocation for team growth'
+  })
+});
+```
+
+<Tip>
+  If gasless voting is enabled, votes are submitted as signed messages instead of onchain transactions, saving gas fees.
+</Tip>
+
+## Step 8: Explore Delegation
+
+Delegation allows token holders to delegate their voting power to trusted representatives:
+
+### Delegate Your Voting Power
+
+<Steps>
+  <Step title="Navigate to delegates">
+    Go to `/delegates` to see the list of delegates.
+  </Step>
+  
+  <Step title="Find a delegate">
+    Browse delegate profiles, statements, and voting history.
+  </Step>
+  
+  <Step title="Delegate">
+    Click **Delegate** on a delegate's profile and confirm the transaction.
+  </Step>
+</Steps>
+
+### Create a Delegate Profile
+
+To become a delegate:
+
+<Steps>
+  <Step title="Go to delegate creation">
+    Navigate to `/delegates/create`.
+  </Step>
+  
+  <Step title="Fill in your statement">
+    Add information about yourself:
+    - Bio and governance philosophy
+    - Social links (Twitter, Discord, Warpcast)
+    - Email for notifications (optional)
+  </Step>
+  
+  <Step title="Submit">
+    Sign and submit your delegate statement.
+  </Step>
+</Steps>
+
+## Next Steps
+
+Congratulations! You now have Agora running locally and understand the core workflows. Here's what to explore next:
+
+<CardGroup cols={2}>
+  <Card title="Architecture Deep Dive" icon="sitemap" href="/architecture">
+    Learn about Agora's system design, multi-tenant architecture, and database schema.
+  </Card>
+  
+  <Card title="Configuration Guide" icon="gear" href="/guides/configuration">
+    Explore all environment variables and advanced configuration options.
+  </Card>
+  
+  <Card title="Deployment Guide" icon="rocket" href="/guides/deployment">
+    Deploy Agora to production on Vercel or your own infrastructure.
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Comprehensive API documentation for building integrations.
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+### Database Connection Issues
+
+<AccordionGroup>
+  <Accordion title="Error: Can't reach database server">
+    **Cause**: PostgreSQL is not running or connection string is incorrect.
+    
+    **Solution**:
+    1. Verify PostgreSQL is running: `pg_isready`
+    2. Check connection string format: `postgres://user:password@host:port/database`
+    3. Ensure database exists: `createdb agora_dev`
+  </Accordion>
+  
+  <Accordion title="Error: Schema not found">
+    **Cause**: Database schema hasn't been created for your tenant.
+    
+    **Solution**: Run migrations from the [queries repository](https://github.com/voteagora/queries) to create the required schemas.
+  </Accordion>
+</AccordionGroup>
+
+### RPC and Blockchain Issues
+
+<AccordionGroup>
+  <Accordion title="Error: Could not fetch data from blockchain">
+    **Cause**: Invalid or rate-limited Alchemy API key.
+    
+    **Solution**:
+    1. Verify your Alchemy API key is correct
+    2. Check Alchemy dashboard for rate limit status
+    3. Use separate keys for client and server
+  </Accordion>
+  
+  <Accordion title="Wrong network detected">
+    **Cause**: Wallet connected to incorrect network.
+    
+    **Solution**: Switch your wallet to the correct network for your tenant (Mainnet for ENS, Optimism for OP, etc.).
+  </Accordion>
+</AccordionGroup>
+
+### Build and Runtime Errors
+
+<AccordionGroup>
+  <Accordion title="TypeScript errors">
+    **Solution**:
+    1. Regenerate types: `npm run generate-typechain`
+    2. Regenerate Prisma client: `npx prisma generate`
+    3. Check TypeScript: `npm run typecheck`
+  </Accordion>
+  
+  <Accordion title="Environment variable not found">
+    **Solution**: Ensure `.env.local` is in the project root and contains all required variables. Restart the dev server after changes.
+  </Accordion>
+</AccordionGroup>
+
+<Info>
+  For additional help, join the Discord community or open an issue on [GitHub](https://github.com/voteagora/agora-next/issues).
+</Info>
+
+## Additional Resources
+
+- **Environment Variables**: See the [README](https://github.com/voteagora/agora-next#environment-variables) for a complete list of all environment variables
+- **Database Manual**: [Database setup guide](https://www.notion.so/argoagora/Database-Manual-7f59ed03bffb4096a2b19e34e2956085)
+- **Queries Repository**: [Database schema and migrations](https://github.com/voteagora/queries)

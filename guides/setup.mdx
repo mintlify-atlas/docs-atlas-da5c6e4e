@@ -1,0 +1,286 @@
+---
+title: Setup Guide
+description: Learn how to set up your Agora development environment from scratch
+---
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed on your system:
+
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="node-js">
+    Version 18 or higher required
+  </Card>
+  <Card title="npm" icon="box">
+    Comes with Node.js installation
+  </Card>
+  <Card title="PostgreSQL" icon="database">
+    Required for local database
+  </Card>
+  <Card title="Git" icon="git">
+    For version control
+  </Card>
+</CardGroup>
+
+### Verify Prerequisites
+
+Run these commands to verify your installations:
+
+```bash
+node --version  # Should be v18.0.0 or higher
+npm --version   # Should be 8.0.0 or higher
+psql --version  # PostgreSQL version
+```
+
+## Initial Project Setup
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the Agora repository to your local machine:
+
+    ```bash
+    git clone <repository-url>
+    cd agora-next
+    ```
+  </Step>
+
+  <Step title="Install dependencies">
+    Install all required npm packages:
+
+    ```bash
+    npm install
+    ```
+
+    This will install all dependencies listed in `package.json`, including:
+    - **Next.js 14.2.35** - React framework
+    - **Prisma 5.22.0** - Database ORM
+    - **TypeScript 5.4.5** - Type safety
+    - **Tailwind CSS 3.3.2** - Styling
+    - **ethers.js 6.16.0** - Ethereum library
+    - **wagmi 2.13.0** - React hooks for Ethereum
+  </Step>
+
+  <Step title="Set up environment variables">
+    Create a `.env.local` file in the project root. Contact your team on Discord to get the complete environment configuration.
+
+    <Note>
+      Never commit `.env.local` or `.env` files to version control. These files contain sensitive credentials.
+    </Note>
+
+    See the [Configuration Guide](/guides/configuration) for detailed environment variable documentation.
+  </Step>
+</Steps>
+
+## Database Setup with Prisma
+
+<Steps>
+  <Step title="Configure database connection">
+    Set your database URL in `.env.local`:
+
+    ```bash
+    # Option 1: Use environment-specific URLs
+    READ_WRITE_WEB2_DATABASE_URL_DEV=postgres://user:password@localhost:5432/agora_web2
+    READ_ONLY_WEB3_DATABASE_URL_DEV=postgres://user:password@localhost:5432/agora_web3
+
+    # Option 2: Use a single database URL
+    DATABASE_URL=postgres://user:password@localhost:5432/agora
+    ```
+
+    <Info>
+      Agora uses a dual-database architecture:
+      - **READ_WRITE_WEB2_DATABASE_URL** - User-generated content (profiles, settings)
+      - **READ_ONLY_WEB3_DATABASE_URL** - Blockchain indexed data (proposals, votes, delegates)
+    </Info>
+  </Step>
+
+  <Step title="Pull the latest schema">
+    The database schema is managed in a [separate repository](https://github.com/voteagora/queries). Pull the latest schema:
+
+    ```bash
+    npx prisma db pull
+    ```
+
+    This command introspects your database and updates the Prisma schema file at `prisma/schema.prisma`.
+  </Step>
+
+  <Step title="Generate Prisma Client">
+    Generate the TypeScript Prisma Client:
+
+    ```bash
+    npx prisma generate
+    ```
+
+    This creates type-safe database access methods based on your schema.
+  </Step>
+
+  <Step title="Verify database access">
+    You can explore your database using a SQL client:
+
+    <CardGroup cols={2}>
+      <Card title="TablePlus" href="https://tableplus.com/">
+        Recommended by the team
+      </Card>
+      <Card title="pgAdmin" href="https://www.pgadmin.org/">
+        Free PostgreSQL tool
+      </Card>
+    </CardGroup>
+
+    The database has the following schemas:
+    - **center** - Admin-only access
+    - **config** - Shared configuration data
+    - **agora** - Shared data (customer info, aggregations)
+    - **[dao namespace]** - DAO-specific schemas (optimism, ens, uniswap, etc.)
+  </Step>
+</Steps>
+
+## Development Environment Setup
+
+<Steps>
+  <Step title="Generate TypeChain contracts">
+    Generate TypeScript typings for smart contracts:
+
+    ```bash
+    npm run generate-typechain
+    ```
+
+    This creates type-safe contract interfaces in `src/lib/contracts/generated/`.
+  </Step>
+
+  <Step title="Start the development server">
+    Launch the Next.js development server:
+
+    ```bash
+    npm run dev
+    ```
+
+    The application will be available at [http://localhost:3000](http://localhost:3000)
+  </Step>
+
+  <Step title="Verify the setup">
+    Open your browser and navigate to `http://localhost:3000`. You should see the Agora interface.
+
+    <Check>
+      If you see the homepage loading successfully, your setup is complete!
+    </Check>
+  </Step>
+</Steps>
+
+## Development Tools
+
+### Code Quality Commands
+
+Before committing code, always run:
+
+```bash
+# Format code with Prettier
+npm run prettier-src
+
+# Check code formatting
+npm run check-prettier
+
+# Run linting
+npm run lint
+
+# Type checking
+npm run typecheck
+
+# Run tests
+npm test
+```
+
+<Warning>
+  Always run `npm run prettier-src`, `npm run lint`, and `npm run typecheck` before committing to ensure code quality.
+</Warning>
+
+### Additional Utilities
+
+```bash
+# Build for production
+npm run build
+
+# Analyze bundle size
+npm run analyze
+
+# Generate API key (for Agora staff)
+npm run generate-apikey -- --email user@example.com --address 0x123... --chain-id 1
+
+# Generate JWT token
+npm run generate-jwt
+```
+
+## Database Management
+
+### Keeping Schema Updated
+
+The database schema is managed externally. To sync your local schema:
+
+```bash
+# Pull latest schema from database
+npx prisma db pull
+
+# Regenerate Prisma Client
+npx prisma generate
+```
+
+<Info>
+  Learn more in the [Database Manual](https://www.notion.so/argoagora/Database-Manual-7f59ed03bffb4096a2b19e34e2956085)
+</Info>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Database connection fails">
+    Verify your database is running and credentials are correct:
+    
+    ```bash
+    psql -h localhost -U your_username -d agora
+    ```
+    
+    Check that your `DATABASE_URL` in `.env.local` matches your database configuration.
+  </Accordion>
+
+  <Accordion title="Prisma generate fails">
+    This usually means the database schema is out of sync:
+    
+    ```bash
+    npx prisma db pull
+    npx prisma generate
+    ```
+  </Accordion>
+
+  <Accordion title="Missing environment variables">
+    Ensure you have all required variables in `.env.local`:
+    - `NEXT_PUBLIC_AGORA_INSTANCE_NAME`
+    - `NEXT_PUBLIC_AGORA_INSTANCE_TOKEN`
+    - `NEXT_PUBLIC_AGORA_ENV`
+    - `NEXT_PUBLIC_ALCHEMY_ID`
+    - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
+    
+    See the [Configuration Guide](/guides/configuration) for the complete list.
+  </Accordion>
+
+  <Accordion title="Port 3000 already in use">
+    Either stop the other process or use a different port:
+    
+    ```bash
+    PORT=3001 npm run dev
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Learn about environment variables and configuration options
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/guides/deployment">
+    Deploy your Agora instance to production
+  </Card>
+  <Card title="Customization" icon="palette" href="/guides/customization">
+    Customize themes, branding, and features
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand the application structure
+  </Card>
+</CardGroup>

@@ -1,0 +1,319 @@
+---
+title: Proposals
+description: Create, manage, and vote on governance proposals in your DAO
+---
+
+Proposals are the primary mechanism for decision-making in your DAO. Agora supports multiple proposal types including standard, optimistic, approval-based, and offchain proposals.
+
+## Overview
+
+The proposal system allows token holders and delegates to:
+
+- **Create proposals** through a guided workflow
+- **Vote on active proposals** with their voting power
+- **Track proposal status** through the governance lifecycle
+- **Execute approved proposals** on-chain
+- **View voting history** and results
+
+## Proposal Types
+
+<CardGroup cols={2}>
+  <Card title="Standard Proposals" icon="file-lines">
+    Traditional on-chain proposals with voting period and quorum requirements
+  </Card>
+  <Card title="Optimistic Proposals" icon="rocket">
+    Pass unless vetoed, ideal for routine operations
+  </Card>
+  <Card title="Approval Voting" icon="check-double">
+    Vote on multiple options simultaneously
+  </Card>
+  <Card title="Offchain Proposals" icon="cloud">
+    Snapshot-based voting for signaling and temperature checks
+  </Card>
+</CardGroup>
+
+## Viewing Proposals
+
+### Proposals List
+
+Access all proposals at `/proposals`. The list shows:
+
+- Proposal title and description
+- Current status (Active, Pending, Succeeded, Defeated, etc.)
+- Vote counts and participation
+- Time remaining for active proposals
+
+<CodeGroup>
+```typescript src/app/api/common/proposals/getProposals.ts
+export async function getProposals({
+  filter,
+  pagination,
+  type,
+}: {
+  filter: string;
+  pagination: PaginationParams;
+  type?: string;
+}): Promise<PaginatedResult<Proposal[]>> {
+  const { namespace, contracts } = Tenant.current();
+  
+  // Fetch proposals with pagination
+  const proposals = await fetchInitialProposals(
+    pagination,
+    filter,
+    type,
+    namespace,
+    contracts
+  );
+  
+  return proposals;
+}
+```
+</CodeGroup>
+
+### Filtering Proposals
+
+Use the filter dropdown to view:
+
+<Steps>
+  <Step title="Relevant Proposals">
+    Shows active and recent proposals (excludes cancelled)
+  </Step>
+  <Step title="All Proposals">
+    Complete proposal history including cancelled proposals
+  </Step>
+</Steps>
+
+## Creating Proposals
+
+<Note>
+  Proposal creation requires sufficient voting power and may require sponsorship from a delegate.
+</Note>
+
+### Draft Proposals
+
+Agora provides a draft system for creating proposals:
+
+<Steps>
+  <Step title="Create Draft">
+    Start a new proposal draft from the Proposals page
+  </Step>
+  <Step title="Add Details">
+    Fill in title, description, and transaction details
+  </Step>
+  <Step title="Request Sponsorship">
+    If needed, request a delegate to sponsor your proposal
+  </Step>
+  <Step title="Submit On-Chain">
+    Once ready, submit the proposal to the blockchain
+  </Step>
+</Steps>
+
+### Proposal Stages
+
+The proposal lifecycle typically follows these stages:
+
+1. **Drafting** - Create and refine proposal text
+2. **Temp Check** - Optional community temperature check
+3. **GitHub PR** - Link to implementation (if applicable)
+4. **Awaiting Submission** - Ready for on-chain submission
+5. **Active** - Voting is open
+6. **Succeeded/Defeated** - Vote completed
+7. **Queued** - Approved and waiting for execution
+8. **Executed** - Changes applied on-chain
+
+<CodeGroup>
+```typescript Example Proposal Data
+type Proposal = {
+  id: string;
+  proposer: string;
+  markdowntitle: string;
+  description: string;
+  status: ProposalStatus;
+  startTime: Date;
+  endTime: Date;
+  quorum: bigint;
+  proposalResults: {
+    for: bigint;
+    against: bigint;
+    abstain: bigint;
+  };
+};
+```
+</CodeGroup>
+
+## Voting on Proposals
+
+### Casting a Vote
+
+<Steps>
+  <Step title="Connect Wallet">
+    Ensure your wallet is connected to the platform
+  </Step>
+  <Step title="Navigate to Proposal">
+    Open the proposal details page
+  </Step>
+  <Step title="Select Vote Choice">
+    Choose For, Against, or Abstain
+  </Step>
+  <Step title="Add Reason (Optional)">
+    Explain your voting decision to the community
+  </Step>
+  <Step title="Sign Transaction">
+    Confirm the vote in your wallet
+  </Step>
+</Steps>
+
+<Warning>
+  Votes are final and cannot be changed once submitted. Your voting power is determined at the proposal's snapshot block.
+</Warning>
+
+### Vote Weight
+
+Your vote weight is determined by:
+
+- **Direct tokens** - Tokens you hold in your wallet
+- **Delegated tokens** - Tokens delegated to you by others
+- **Advanced delegations** - Partial or conditional delegations
+
+## Proposal Details Page
+
+Each proposal has a dedicated page showing:
+
+### Overview Section
+- Proposal title and description
+- Proposer information
+- Current status and timeline
+- Transaction details (for on-chain actions)
+
+### Voting Results
+- Real-time vote counts
+- Percentage breakdown
+- Progress toward quorum
+- Individual votes list
+
+### Execution
+For approved proposals:
+- Transaction queue status
+- Execution timeline
+- Transaction details and verification
+
+<CodeGroup>
+```typescript Fetch Proposal Details
+import { fetchProposal } from '@/app/api/common/proposals/getProposals';
+
+const proposal = await fetchProposal(proposalId);
+
+console.log(proposal.status); // "ACTIVE", "SUCCEEDED", etc.
+console.log(proposal.quorum); // Minimum votes needed
+```
+</CodeGroup>
+
+## API Integration
+
+### Fetching Proposals
+
+```typescript
+import { fetchProposals } from '@/app/api/common/proposals/getProposals';
+
+const result = await fetchProposals({
+  filter: 'relevant',
+  pagination: { limit: 10, offset: 0 }
+});
+
+console.log(result.data); // Array of proposals
+console.log(result.meta); // Pagination metadata
+```
+
+### Getting Proposal Types
+
+```typescript
+import { fetchProposalTypes } from '@/app/api/common/proposals/getProposals';
+
+const types = await fetchProposalTypes();
+// Returns configured proposal types with quorum and approval thresholds
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Writing Effective Proposals">
+    - Use clear, concise titles
+    - Provide detailed rationale and context
+    - Include expected outcomes and success metrics
+    - Link to relevant discussions and research
+    - Specify exact transaction details
+  </Accordion>
+
+  <Accordion title="Proposal Timing">
+    - Consider governance calendar and review periods
+    - Allow sufficient time for community discussion
+    - Avoid submitting during holidays or major events
+    - Coordinate with related proposals
+  </Accordion>
+
+  <Accordion title="Engagement">
+    - Participate in discussion threads
+    - Address community feedback
+    - Update proposal based on input
+    - Provide voting rationale when casting votes
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Features
+
+### Hybrid Proposals
+
+Combine on-chain and off-chain voting:
+- Off-chain signaling through Snapshot
+- On-chain execution of approved proposals
+- Linked proposal metadata
+
+### Proposal Archival
+
+Access historical proposals through the archive system:
+- Full text search across past proposals
+- Filter by date, status, and proposer
+- View voting history and outcomes
+
+### Tax Forms
+
+For DAOs requiring tax documentation:
+- Automated tax form generation
+- Delegate voting activity reports
+- Compensation tracking
+
+## Related Features
+
+<CardGroup cols={2}>
+  <Card title="Voting" href="/features/voting" icon="square-check">
+    Learn about the voting system and mechanics
+  </Card>
+  <Card title="Delegation" href="/features/delegation" icon="users">
+    Understand how to delegate your voting power
+  </Card>
+  <Card title="Forums" href="/features/forums" icon="comments">
+    Discuss proposals with the community
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Cannot create proposal">
+    - Check if you meet minimum voting power requirements
+    - Verify wallet connection and network
+    - Request sponsorship from an eligible delegate
+  </Accordion>
+
+  <Accordion title="Vote not appearing">
+    - Confirm transaction was successful on block explorer
+    - Wait for block confirmations (usually 1-2 minutes)
+    - Check that proposal was active during your vote
+  </Accordion>
+
+  <Accordion title="Missing voting power">
+    - Voting power is snapshot at proposal creation time
+    - Recent token transfers won't affect existing proposals
+    - Check delegation status at the snapshot block
+  </Accordion>
+</AccordionGroup>

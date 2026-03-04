@@ -1,0 +1,486 @@
+---
+title: 'Emoji Reactions'
+description: 'Add emoji reactions and upvoting to forum posts for real-time user engagement'
+---
+
+## Overview
+
+The forum system supports emoji reactions on posts, allowing users to express their feelings and engagement without writing a full reply. The system also includes topic upvoting for content curation.
+
+## Emoji Reactions
+
+### Default Emoji Set
+
+The system provides these default emojis:
+
+👍 🔥 🤔 👀 🎉 ❤️ 👏 😄 🤝
+
+### Using the EmojiReactions Component
+
+```typescript src/components/Forum/EmojiReactions.tsx
+import EmojiReactions from '@/components/Forum/EmojiReactions';
+
+function PostCard({ post }) {
+  return (
+    <div>
+      <p>{post.content}</p>
+      
+      <EmojiReactions
+        targetType="post"
+        targetId={post.id}
+        initialByEmoji={post.reactionsByEmoji}
+      />
+    </div>
+  );
+}
+```
+
+### Component Features
+
+<AccordionGroup>
+  <Accordion title="Real-time Updates">
+    The component uses optimistic UI updates with server sync:
+    
+    ```typescript
+    // Optimistically update UI
+    setByEmoji((prevState) => {
+      if (currentlyMine) {
+        // Remove reaction
+        const arr = prevState[emoji].filter(a => a.toLowerCase() !== me);
+        return arr.length === 0 
+          ? { ...prevState, [emoji]: undefined } 
+          : { ...prevState, [emoji]: arr };
+      } else {
+        // Add reaction
+        const arr = [...(prevState[emoji] || []), address];
+        return { ...prevState, [emoji]: arr };
+      }
+    });
+
+    // Make API call
+    const ok = await (currentlyMine ? removeReaction : addReaction)(
+      targetType, 
+      targetId, 
+      emoji
+    );
+
+    // Revert on failure
+    if (!ok) setByEmoji(previousState);
+    ```
+  </Accordion>
+  
+  <Accordion title="Unicode Normalization">
+    Emojis are normalized to NFC form for consistent storage:
+    
+    ```typescript
+    function normalizeEmoji(input: string): string {
+      // Trim and normalize to NFC
+      const e = (input || '').trim().normalize('NFC');
+      
+      // Use Intl.Segmenter to ensure single grapheme cluster
+      const seg = new Intl.Segmenter('en', { granularity: 'grapheme' });
+      const it = seg.segment(e)[Symbol.iterator]();
+      
+      return e;
+    }
+    ```
+    
+    This handles complex emojis with skin tones and ZWJ sequences.
+  </Accordion>
+  
+  <Accordion title="User Reaction Tracking">
+    The system tracks which users reacted with which emojis:
+    
+    ```typescript
+    interface ReactionsByEmoji {
+      '👍': ['0x123...', '0x456...'],
+      '🔥': ['0x789...'],
+      // ... more reactions
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Server Actions
+
+### Add Reaction
+
+```typescript src/lib/actions/forum/reactions.ts
+export async function addForumReaction(
+  data: z.infer<typeof addReactionSchema>
+) {
+  const validated = addReactionSchema.parse(data);
+  const { slug } = Tenant.current();
+
+  // Verify signature
+  const isValid = await verifyMessage({
+    address: validated.address as `0x${string}`,
+    message: validated.message,
+    signature: validated.signature as `0x${string}`,
+  });
+
+  if (!isValid) return { success: false, error: 'Invalid signature' };
+
+  // Check voting power (unless user has RBAC permission)
+  const hasPostPermission = await checkPermission(
+    validated.address,
+    slug as DaoSlug,
+    'forums',
+    'posts',
+    'create'
+  );
+
+  if (!hasPostPermission) {
+    const votingPowerBigInt = await fetchVotingPowerFromContract(
+      client,
+      validated.address,
+      { namespace: tenant.namespace, contracts: tenant.contracts }
+    );
+    
+    const currentVP = formatVotingPower(votingPowerBigInt);
+    const vpCheck = await canPerformAction(currentVP, slug);
+
+    if (!vpCheck.allowed) {
+      return {
+        success: false,
+        error: formatVPError(vpCheck, 'react to posts'),
+      };
+    }
+  }
+
+  // Normalize emoji
+  const emoji = normalizeEmoji(validated.emoji);
+
+  // Upsert reaction (idempotent)
+  const created = await prismaWeb2Client.forumPostReaction.upsert({
+    where: {
+      dao_slug_address_postId_emoji: {
+        dao_slug: slug,
+        address: validated.address.toLowerCase(),
+        postId: validated.targetId,
+        emoji,
+      },
+    },
+    update: {},
+    create: {
+      dao_slug: slug,
+      address: validated.address.toLowerCase(),
+      postId: validated.targetId,
+      emoji,
+    },
+  });
+
+  return { success: true, data: created };
+}
+```
+
+### Remove Reaction
+
+```typescript src/lib/actions/forum/reactions.ts
+export async function removeForumReaction(
+  data: z.infer<typeof removeReactionSchema>
+) {
+  const validated = removeReactionSchema.parse(data);
+  const { slug } = Tenant.current();
+
+  // Verify signature
+  const isValid = await verifyMessage({
+    address: validated.address as `0x${string}`,
+    message: validated.message,
+    signature: validated.signature as `0x${string}`,
+  });
+
+  if (!isValid) return { success: false, error: 'Invalid signature' };
+
+  // Normalize emoji
+  const emoji = normalizeEmoji(validated.emoji);
+
+  // Delete reaction
+  await prismaWeb2Client.forumPostReaction.delete({
+    where: {
+      dao_slug_address_postId_emoji: {
+        dao_slug: slug,
+        address: validated.address.toLowerCase(),
+        postId: validated.targetId,
+        emoji,
+      },
+    },
+  });
+
+  return { success: true };
+}
+```
+
+## Topic Upvoting
+
+Topics can be upvoted to show support and help surface quality content.
+
+### Implementation
+
+Upvotes are stored as votes on the first post of a topic:
+
+```typescript
+model forum_post_votes {
+  dao_slug   DaoSlug
+  address    String
+  post_id    Int
+  vote       Int       // 1 for upvote, -1 for downvote
+  created_at DateTime  @default(now())
+  
+  @@id([dao_slug, address, post_id])
+}
+```
+
+### Upvote a Topic
+
+```typescript src/lib/actions/forum/topics.ts
+export async function upvoteForumTopic(data) {
+  // Verify signature
+  const isValid = await verifyMessage({
+    address: validatedData.address,
+    message: validatedData.message,
+    signature: validatedData.signature,
+  });
+
+  // Upsert vote (one vote per user per topic)
+  await prismaWeb2Client.forumPostVote.upsert({
+    where: {
+      dao_slug_address_postId: {
+        dao_slug: slug,
+        address: validatedData.address.toLowerCase(),
+        postId: validatedData.postId,
+      },
+    },
+    update: { vote: 1 },
+    create: {
+      dao_slug: slug,
+      address: validatedData.address.toLowerCase(),
+      postId: validatedData.postId,
+      vote: 1,
+    },
+  });
+
+  return { success: true };
+}
+```
+
+### Remove Upvote
+
+```typescript
+export async function removeUpvoteForumTopic(data) {
+  await prismaWeb2Client.forumPostVote.delete({
+    where: {
+      dao_slug_address_postId: {
+        dao_slug: slug,
+        address: validatedData.address.toLowerCase(),
+        postId: validatedData.postId,
+      },
+    },
+  });
+
+  return { success: true };
+}
+```
+
+### Get Upvote Count
+
+```typescript
+export async function getForumTopicUpvotes(topicId: number) {
+  const topic = await prismaWeb2Client.forumTopic.findUnique({
+    where: { id: topicId },
+    include: {
+      posts: {
+        take: 1,
+        orderBy: { createdAt: 'asc' },
+        include: {
+          _count: {
+            select: {
+              votes: { where: { vote: 1 } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const upvotes = topic?.posts[0]?._count?.votes || 0;
+  return { success: true, data: upvotes };
+}
+```
+
+## React Hook Integration
+
+```typescript src/hooks/useForum.ts
+export function useForum() {
+  const addReaction = async (
+    targetType: 'post' | 'topic',
+    targetId: number,
+    emoji: string
+  ) => {
+    const address = await requireLogin();
+    if (!address) return false;
+
+    const { signature, message } = await signMessage(
+      `React with ${emoji} to ${targetType} ${targetId}`
+    );
+
+    const result = await addForumReaction({
+      targetType,
+      targetId,
+      emoji,
+      address,
+      signature,
+      message,
+    });
+
+    return result.success;
+  };
+
+  const removeReaction = async (
+    targetType: 'post' | 'topic',
+    targetId: number,
+    emoji: string
+  ) => {
+    const address = await requireLogin();
+    if (!address) return false;
+
+    const { signature, message } = await signMessage(
+      `Remove ${emoji} reaction from ${targetType} ${targetId}`
+    );
+
+    const result = await removeForumReaction({
+      targetType,
+      targetId,
+      emoji,
+      address,
+      signature,
+      message,
+    });
+
+    return result.success;
+  };
+
+  return { addReaction, removeReaction };
+}
+```
+
+## Voting Power Requirements
+
+<Warning>
+  Users need sufficient voting power to add reactions unless they have the `forums.posts.create` RBAC permission.
+</Warning>
+
+```typescript
+// Check voting power before allowing reaction
+const hasPostPermission = await checkPermission(
+  address,
+  daoSlug,
+  'forums',
+  'posts',
+  'create'
+);
+
+if (!hasPostPermission) {
+  const currentVP = await fetchVotingPower(address);
+  const vpCheck = await canPerformAction(currentVP, daoSlug);
+  
+  if (!vpCheck.allowed) {
+    // Show insufficient VP modal
+    return { success: false, error: 'Insufficient voting power' };
+  }
+}
+```
+
+## Insufficient VP Modal
+
+Display a helpful modal when users lack voting power:
+
+```typescript src/components/Forum/InsufficientVPModal.tsx
+import { InsufficientVPModal } from '@/components/Forum/InsufficientVPModal';
+
+function EmojiReactions() {
+  const [showVPModal, setShowVPModal] = useState(false);
+  
+  const handleReaction = async (emoji: string) => {
+    if (!permissions.canReact) {
+      setShowVPModal(true);
+      return;
+    }
+    
+    // Add reaction
+  };
+  
+  return (
+    <>
+      {/* Emoji buttons */}
+      
+      <InsufficientVPModal
+        isOpen={showVPModal}
+        onClose={() => setShowVPModal(false)}
+        action="react"
+      />
+    </>
+  );
+}
+```
+
+## Database Schema
+
+```sql
+CREATE TABLE forum_post_reactions (
+  dao_slug       VARCHAR NOT NULL,
+  address        VARCHAR NOT NULL,
+  post_id        INTEGER NOT NULL,
+  emoji          VARCHAR(16) NOT NULL,
+  created_at     TIMESTAMP DEFAULT NOW(),
+  
+  PRIMARY KEY (dao_slug, address, post_id, emoji),
+  FOREIGN KEY (post_id) REFERENCES forum_posts(id) ON DELETE CASCADE
+);
+
+CREATE TABLE forum_post_votes (
+  dao_slug       VARCHAR NOT NULL,
+  address        VARCHAR NOT NULL,
+  post_id        INTEGER NOT NULL,
+  vote           SMALLINT NOT NULL,
+  created_at     TIMESTAMP DEFAULT NOW(),
+  
+  PRIMARY KEY (dao_slug, address, post_id),
+  FOREIGN KEY (post_id) REFERENCES forum_posts(id) ON DELETE CASCADE
+);
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Normalize emoji inputs">
+    Always normalize emoji to NFC form to ensure consistent storage and matching.
+  </Accordion>
+  
+  <Accordion title="Use optimistic updates">
+    Update UI immediately and revert on error for better UX.
+  </Accordion>
+  
+  <Accordion title="Make operations idempotent">
+    Use upsert for adding reactions so duplicate requests don't cause errors.
+  </Accordion>
+  
+  <Accordion title="Verify signatures">
+    Always verify wallet signatures before modifying reaction data.
+  </Accordion>
+  
+  <Accordion title="Check voting power">
+    Verify users have sufficient VP before allowing reactions (unless they have RBAC permissions).
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Topics & Posts" icon="comments" href="/forum/topics-and-posts">
+    Learn about creating topics and posts
+  </Card>
+  <Card title="Moderation" icon="gavel" href="/forum/moderation">
+    Set up content moderation and admin tools
+  </Card>
+</CardGroup>
